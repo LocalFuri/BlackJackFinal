@@ -47,12 +47,21 @@ namespace Blackjack
         /// <summary>
         /// Manipulates the top of the deck so the player's first two cards
         /// will be Ace of Spades and King of Hearts (natural blackjack).
-        /// Deal order: Player[^1], Dealer[^1], Player[^1], Dealer[^1].
         /// </summary>
         public void ForcePlayerBlackjack()
         {
-            PlaceAtIndex(new CardData(Suit.Spades, Rank.Ace),  _cards.Count - 1); // drawn 1st → player card 1
-            PlaceAtIndex(new CardData(Suit.Hearts, Rank.King), _cards.Count - 3); // drawn 3rd → player card 2
+            PlaceAtIndex(new CardData(Suit.Spades, Rank.Ace),  _cards.Count - 1);
+            PlaceAtIndex(new CardData(Suit.Hearts, Rank.King), _cards.Count - 3);
+        }
+
+        /// <summary>
+        /// Manipulates the top of the deck so the player's first two cards
+        /// will be Five of Spades and Five of Hearts — ideal for testing split.
+        /// </summary>
+        public void ForceSplitHand()
+        {
+            PlaceAtIndex(new CardData(Suit.Spades, Rank.Five), _cards.Count - 1);
+            PlaceAtIndex(new CardData(Suit.Hearts, Rank.Five), _cards.Count - 3);
         }
 
         /// <summary>Moves a specific card to the given index within the list.</summary>

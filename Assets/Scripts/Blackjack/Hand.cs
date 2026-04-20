@@ -16,6 +16,9 @@ namespace Blackjack
 
         public void AddCard(CardData card) => _cards.Add(card);
 
+        /// <summary>Removes the card at the given index (used when splitting).</summary>
+        public void RemoveAt(int index) => _cards.RemoveAt(index);
+
         /// <summary>
         /// Returns the best possible hand value (aces counted as 1 when needed to avoid bust).
         /// </summary>
