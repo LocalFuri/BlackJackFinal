@@ -20,6 +20,7 @@ namespace Blackjack
 
         [Header("Layout - Player")]
         [SerializeField] private Transform playerCardArea;
+        [SerializeField] private Transform splitCardArea;
 
         [Header("Layout - Dealer")]
         [SerializeField] private Transform dealerCardArea;
@@ -212,7 +213,7 @@ namespace Blackjack
                 UpdateScoreLabels(revealDealer: true);
 
                 if (playerBJ && dealerBJ)  { PlayTieSound();   SetStatus("Both Blackjack! Push."); }
-                else if (playerBJ)         { ApplyBlackjackGlow(); fireworks.Play(Vector2.zero); PlayNaturalBlackjackSound(); SetStatus("Blackjack! Player wins!"); }
+                else if (playerBJ)         { ApplyBlackjackGlow(); fireworks.Play(GetPlayerCardsCenter()); PlayNaturalBlackjackSound(); SetStatus("Blackjack! Player wins!"); }
                 else                       { PlayLoseSound();   SetStatus("Dealer Blackjack! Dealer wins."); }
 
                 yield return StartCoroutine(EndRound());
@@ -249,18 +250,18 @@ namespace Blackjack
             CardView movedView = _playerCardViews[1];
             _playerCardViews.RemoveAt(1);
 
-            // Move card[1] to player area as a split card
-            movedView.transform.SetParent(playerCardArea, worldPositionStays: true);
+            // Move card[1] to split card area
+            movedView.transform.SetParent(splitCardArea, worldPositionStays: false);
             _splitCardViews.Add(movedView);
             _splitHand.AddCard(movedCard);
 
-            yield return new WaitForSeconds(0.3f);
+            yield return new WaitForSeconds(0.5f);
 
             bool isAces = _playerHand.Cards[0].Rank == Rank.Ace;
 
-            // Deal second card to each hand — stacked on top of the existing card
+            // Deal second card to each hand
             yield return StartCoroutine(DealCardTo(_playerHand,  _playerCardViews, playerCardArea, faceUp: true));
-            yield return StartCoroutine(DealCardTo(_splitHand,   _splitCardViews,  playerCardArea,  faceUp: true));
+            yield return StartCoroutine(DealCardTo(_splitHand,   _splitCardViews,  splitCardArea,  faceUp: true));
 
             UpdateScoreLabels(revealDealer: false);
             _activeHandIndex = 0;
@@ -308,7 +309,8 @@ namespace Blackjack
         {
             SetButtonState(dealEnabled: false, actionEnabled: false, splitEnabled: false);
 
-            yield return StartCoroutine(DealCardTo(ActiveHand, ActiveViews, playerCardArea, faceUp: true));
+            Transform area = (_isSplitRound && _activeHandIndex == 1) ? splitCardArea : playerCardArea;
+            yield return StartCoroutine(DealCardTo(ActiveHand, ActiveViews, area, faceUp: true));
             UpdateScoreLabels(revealDealer: false);
 
             int score = ActiveHand.BestValue();
@@ -431,17 +433,6 @@ namespace Blackjack
 
             CardView view = SpawnCardView(card, area, faceUp);
 
-            // Split hand: place each new card exactly below the first split card.
-            if (views == _splitCardViews && views.Count > 0)
-            {
-                RectTransform firstRt = views[0].GetComponent<RectTransform>();
-                RectTransform rt      = view.GetComponent<RectTransform>();
-                rt.anchoredPosition = new Vector2(
-                    firstRt.anchoredPosition.x,
-                    firstRt.anchoredPosition.y - firstRt.rect.height * (float)views.Count
-                );
-            }
-
             views.Add(view);
         }
 
@@ -512,6 +503,28 @@ namespace Blackjack
         }
 
         private void SetStatus(string message) => statusLabel.text = message;
+
+        /// <summary>Returns the center of the first two player cards in the fireworks RectTransform's local space.</summary>
+        private Vector2 GetPlayerCardsCenter()
+        {
+            if (_playerCardViews.Count < 2 || fireworks == null)
+                return Vector2.zero;
+
+            RectTransform fireworksRt = fireworks.GetComponent<RectTransform>();
+            Vector3 worldPos0 = _playerCardViews[0].transform.position;
+            Vector3 worldPos1 = _playerCardViews[1].transform.position;
+            Vector3 worldCenter = (worldPos0 + worldPos1) * 0.5f;
+
+            Vector2 localCenter;
+            RectTransformUtility.ScreenPointToLocalPointInRectangle(
+                fireworksRt,
+                RectTransformUtility.WorldToScreenPoint(null, worldCenter),
+                null,
+                out localCenter
+            );
+
+            return localCenter;
+        }
 
         /// <summary>Plays the win sound if both clip and source are assigned.</summary>
         private void PlayWinSound()
