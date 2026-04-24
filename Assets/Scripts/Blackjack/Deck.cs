@@ -55,6 +55,20 @@ namespace Blackjack
         }
 
         /// <summary>
+        /// Manipulates the top of the deck so both the player and dealer
+        /// receive a natural blackjack. Places cards top-down so each
+        /// subsequent insert pushes previously placed cards back into position.
+        /// Deal order: [Count-1] player1, [Count-2] dealer1, [Count-3] player2, [Count-4] dealer2.
+        /// </summary>
+        public void ForceBothBlackjack()
+        {
+            PlaceAtIndex(new CardData(Suit.Spades,   Rank.Ace),   _cards.Count - 1); // player card 1
+            PlaceAtIndex(new CardData(Suit.Diamonds, Rank.Ace),   _cards.Count - 2); // dealer card 1
+            PlaceAtIndex(new CardData(Suit.Hearts,   Rank.King),  _cards.Count - 3); // player card 2
+            PlaceAtIndex(new CardData(Suit.Clubs,    Rank.Queen), _cards.Count - 4); // dealer card 2
+        }
+
+        /// <summary>
         /// Manipulates the top of the deck so the player's first two cards
         /// will be Five of Spades and Five of Hearts — ideal for testing split.
         /// </summary>

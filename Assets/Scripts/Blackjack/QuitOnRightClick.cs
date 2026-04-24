@@ -6,13 +6,12 @@ namespace Blackjack
 {
     /// <summary>
     /// Quits the application when the right mouse button is pressed.
-    /// Plays an exit sound clip before quitting.
+    /// Plays an exit sound via BlackjackGame before quitting.
     /// In the Editor, stops Play Mode instead.
     /// </summary>
     public class QuitOnRightClick : MonoBehaviour
     {
-        [SerializeField] private AudioClip exitSound;
-        [SerializeField] private AudioSource audioSource;
+        [SerializeField] private BlackjackGame gameManager;
 
         private bool _isQuitting;
 
@@ -27,10 +26,10 @@ namespace Blackjack
         {
             _isQuitting = true;
 
-            if (exitSound != null && audioSource != null)
+            if (gameManager != null)
             {
-                audioSource.PlayOneShot(exitSound);
-                yield return new WaitForSeconds(exitSound.length);
+                float length = gameManager.PlayExitSound();
+                yield return new WaitForSeconds(length);
             }
 
             Quit();

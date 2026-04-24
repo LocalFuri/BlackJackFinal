@@ -44,5 +44,28 @@ namespace Blackjack
 
         public bool IsBust()       => BestValue() > 21;
         public bool IsBlackjack()  => _cards.Count == 2 && BestValue() == 21;
+
+        /// <summary>
+        /// Returns true when the hand is "soft" — at least one Ace is still counted as 11.
+        /// </summary>
+        public bool IsSoft()
+        {
+            int total = 0;
+            int aces  = 0;
+
+            foreach (CardData card in _cards)
+            {
+                total += card.BlackjackValue;
+                if (card.Rank == Rank.Ace) aces++;
+            }
+
+            while (total > 21 && aces > 0)
+            {
+                total -= 10;
+                aces--;
+            }
+
+            return aces > 0;
+        }
     }
 }

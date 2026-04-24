@@ -34,6 +34,7 @@ namespace Blackjack
         [SerializeField] private Button standButton;
         [SerializeField] private Button surrenderButton;
         [SerializeField] private Button splitButton;
+        [SerializeField] private Button doubleDownButton;
 
         [Header("Score Labels")]
         [SerializeField] private TextMeshProUGUI playerScoreLabel;
@@ -47,12 +48,16 @@ namespace Blackjack
 
         [Header("Audio")]
         [SerializeField] private AudioSource audioSource;
-        [SerializeField] private AudioClip startupSound;
-        [SerializeField] private AudioClip winSound;
-        [SerializeField] private AudioClip naturalBlackjackSound;
-        [SerializeField] private AudioClip loseSound;
-        [SerializeField] private AudioClip tieSound;
-        [SerializeField] private AudioClip dealCardSound;
+        [SerializeField] private SoundEntry startupSound;
+        [SerializeField] private SoundEntry winSound;
+        [SerializeField] private SoundEntry naturalBlackjackSound;
+        [SerializeField] private SoundEntry loseSound;
+        [SerializeField] private SoundEntry tieSound;
+        [SerializeField] private SoundEntry dealCardSound;
+        [SerializeField] private SoundEntry yuhuSound;
+        [SerializeField] private SoundEntry cheaterSound;
+        [SerializeField] private SoundEntry cardSlideSound;
+        [SerializeField] private SoundEntry exitSound;
 
         [Header("Timing")]
         [SerializeField] private float dealDelay        = 0.45f;
@@ -63,6 +68,7 @@ namespace Blackjack
         // ──────────────────────────────────────────────────────────────────────────
 
         private const int AutoStandThreshold = 16;
+        private const int DealerSoft17       = 17;
         private const int BlackjackValue     = 21;
 
         // ──────────────────────────────────────────────────────────────────────────
@@ -81,6 +87,7 @@ namespace Blackjack
         private CardView _dealerHoleCardView;
 
         private bool _forcePlayerBlackjack;
+        private bool _forceBothBlackjack;
         private bool _forceSplitHand;
         private bool _isSplitRound;
         private int  _activeHandIndex; // 0 = player, 1 = split
@@ -97,12 +104,23 @@ namespace Blackjack
 
         private void Start()
         {
-            if (startupSound != null && audioSource != null)
-                audioSource.PlayOneShot(startupSound);
+            if (startupSound.HasClip && audioSource != null)
+                startupSound.Play(audioSource);
 
             _deck.Build();
             SetButtonState(dealEnabled: true, actionEnabled: false, splitEnabled: false);
             SetStatus("Press Deal to start.");
+        }
+
+        // ──────────────────────────────────────────────────────────────────────────
+        // Public Audio API
+        // ──────────────────────────────────────────────────────────────────────────
+
+        /// <summary>Plays the exit sound and returns its length in seconds.</summary>
+        public float PlayExitSound()
+        {
+            exitSound.Play(audioSource);
+            return exitSound.Length;
         }
 
         // ──────────────────────────────────────────────────────────────────────────
@@ -162,6 +180,17 @@ namespace Blackjack
             StartCoroutine(PerformSplit());
         }
 
+        /// <summary>
+        /// Doubles down: player receives exactly one more card, then automatically stands.
+        /// Only available on the initial two-card hand.
+        /// </summary>
+        public void OnDoubleDown()
+        {
+            if (_state != GameState.PlayerTurn) return;
+            if (ActiveHand.Cards.Count != 2) return;
+            StartCoroutine(PerformDoubleDown());
+        }
+
         /// <summary>Forces the next deal to give the player a natural blackjack, then starts the round.</summary>
         public void OnBlackjackTest()
         {
@@ -178,6 +207,14 @@ namespace Blackjack
             StartCoroutine(DealRound());
         }
 
+        /// <summary>Forces the next deal to give both player and dealer a natural blackjack, then starts the round.</summary>
+        public void OnBothBlackjackTest()
+        {
+            if (_state != GameState.Idle) return;
+            _forceBothBlackjack = true;
+            StartCoroutine(DealRound());
+        }
+
         // ──────────────────────────────────────────────────────────────────────────
         // Round Flow
         // ──────────────────────────────────────────────────────────────────────────
@@ -189,6 +226,7 @@ namespace Blackjack
 
             _deck.Build();
 
+            if (_forceBothBlackjack)   { _deck.ForceBothBlackjack();   _forceBothBlackjack   = false; }
             if (_forcePlayerBlackjack) { _deck.ForcePlayerBlackjack(); _forcePlayerBlackjack = false; }
             if (_forceSplitHand)       { _deck.ForceSplitHand();       _forceSplitHand       = false; }
 
@@ -212,7 +250,7 @@ namespace Blackjack
                 yield return StartCoroutine(RevealHoleCard());
                 UpdateScoreLabels(revealDealer: true);
 
-                if (playerBJ && dealerBJ)  { PlayTieSound();   SetStatus("Both Blackjack! Push."); }
+                if (playerBJ && dealerBJ)  { cheaterSound.Play(audioSource); SetStatus("Both Blackjack! Push."); }
                 else if (playerBJ)         { ApplyBlackjackGlow(); fireworks.Play(GetPlayerCardsCenter()); PlayNaturalBlackjackSound(); SetStatus("Blackjack! Player wins!"); }
                 else                       { PlayLoseSound();   SetStatus("Dealer Blackjack! Dealer wins."); }
 
@@ -221,7 +259,7 @@ namespace Blackjack
             }
 
             // ── Player turn ──
-            SetButtonState(dealEnabled: false, actionEnabled: true, splitEnabled: CanSplit());
+            SetButtonState(dealEnabled: false, actionEnabled: true, splitEnabled: CanSplit(), doubleDownEnabled: CanDoubleDown());
             SetStatus($"Your turn. Score: {_playerHand.BestValue()}");
 
             if (_playerHand.BestValue() >= AutoStandThreshold)
@@ -255,6 +293,7 @@ namespace Blackjack
             _splitCardViews.Add(movedView);
             _splitHand.AddCard(movedCard);
 
+            cardSlideSound.Play(audioSource);
             yield return new WaitForSeconds(0.5f);
 
             bool isAces = _playerHand.Cards[0].Rank == Rank.Ace;
@@ -282,6 +321,38 @@ namespace Blackjack
                 yield return new WaitForSeconds(0.3f);
                 yield return StartCoroutine(AdvanceOrDealerTurn());
             }
+        }
+
+        // ── Double Down ───────────────────────────────────────────────────────────
+
+        private bool CanDoubleDown() =>
+            ActiveHand.Cards.Count == 2 && !_isSplitRound;
+
+        private IEnumerator PerformDoubleDown()
+        {
+            SetButtonState(dealEnabled: false, actionEnabled: false, splitEnabled: false);
+            SetStatus("Double Down!");
+
+            yield return StartCoroutine(
+                DealCardTo(ActiveHand, ActiveViews,
+                           _activeHandIndex == 0 ? playerCardArea : splitCardArea,
+                           faceUp: true));
+
+            UpdateScoreLabels(revealDealer: false);
+
+            if (ActiveHand.IsBust())
+            {
+                yield return StartCoroutine(RevealHoleCard());
+                UpdateScoreLabels(revealDealer: true);
+                PlayLoseSound();
+                SetStatus($"Bust with {ActiveHand.BestValue()}! Dealer wins.");
+                yield return StartCoroutine(EndRound());
+                yield break;
+            }
+
+            SetStatus($"Double Down stands at {ActiveHand.BestValue()}.");
+            yield return new WaitForSeconds(dealerPauseDelay);
+            yield return StartCoroutine(AdvanceOrDealerTurn());
         }
 
         private IEnumerator AdvanceOrDealerTurn()
@@ -321,8 +392,9 @@ namespace Blackjack
                 SetStatus($"{label}! You scored {score}.");
                 PlayLoseSound();
 
-                if (_isSplitRound && _activeHandIndex == 0)
+                if (_isSplitRound)
                 {
+                    // Always advance to next hand or dealer turn so both hands get resolved.
                     yield return new WaitForSeconds(0.5f);
                     yield return StartCoroutine(AdvanceOrDealerTurn());
                 }
@@ -355,17 +427,36 @@ namespace Blackjack
             yield return StartCoroutine(RevealHoleCard());
             UpdateScoreLabels(revealDealer: true);
 
-            SetStatus("Dealer's turn...");
-            yield return new WaitForSeconds(dealerPauseDelay);
+            // If both split hands busted, skip dealer drawing.
+            bool allPlayerHandsBusted = _isSplitRound
+                ? _playerHand.IsBust() && _splitHand.IsBust()
+                : _playerHand.IsBust();
 
-            while (_dealerHand.BestValue() < AutoStandThreshold)
+            if (!allPlayerHandsBusted)
             {
-                yield return StartCoroutine(DealCardTo(_dealerHand, _dealerCardViews, dealerCardArea, faceUp: true));
-                UpdateScoreLabels(revealDealer: true);
+                SetStatus("Dealer's turn...");
                 yield return new WaitForSeconds(dealerPauseDelay);
+
+                while (ShouldDealerHit())
+                {
+                    yield return StartCoroutine(DealCardTo(_dealerHand, _dealerCardViews, dealerCardArea, faceUp: true));
+                    UpdateScoreLabels(revealDealer: true);
+                    yield return new WaitForSeconds(dealerPauseDelay);
+                }
             }
 
             yield return StartCoroutine(ResolveRound());
+        }
+
+        /// <summary>
+        /// Dealer hits below 17, and also hits on soft 17 (a 17 with an Ace counted as 11).
+        /// </summary>
+        private bool ShouldDealerHit()
+        {
+            int value = _dealerHand.BestValue();
+            if (value < DealerSoft17) return true;
+            if (value == DealerSoft17 && _dealerHand.IsSoft()) return true;
+            return false;
         }
 
         private IEnumerator ResolveRound()
@@ -428,8 +519,8 @@ namespace Blackjack
             CardData card = _deck.Draw();
             hand.AddCard(card);
 
-            if (dealCardSound != null && audioSource != null)
-                audioSource.PlayOneShot(dealCardSound);
+            if (dealCardSound.HasClip && audioSource != null)
+                dealCardSound.Play(audioSource);
 
             CardView view = SpawnCardView(card, area, faceUp);
 
@@ -529,20 +620,31 @@ namespace Blackjack
         /// <summary>Plays the win sound if both clip and source are assigned.</summary>
         private void PlayWinSound()
         {
-            if (winSound != null && audioSource != null)
-                audioSource.PlayOneShot(winSound);
+            winSound.Play(audioSource);
         }
 
         /// <summary>Plays the natural blackjack sound if assigned, otherwise falls back to win sound.
-        /// Stops all player card glow pulses once the clip finishes.</summary>
+        /// Also plays the yuhu sound simultaneously. Stops all player card glow pulses once the longest clip finishes.</summary>
         private void PlayNaturalBlackjackSound()
         {
-            AudioClip clip = naturalBlackjackSound != null ? naturalBlackjackSound : winSound;
-            if (clip != null && audioSource != null)
+            SoundEntry primary = naturalBlackjackSound.HasClip ? naturalBlackjackSound : winSound;
+            float longestDuration = 0f;
+
+            if (primary.HasClip && audioSource != null)
             {
-                audioSource.PlayOneShot(clip);
-                StartCoroutine(StopGlowAfterClip(clip.length));
+                primary.Play(audioSource);
+                longestDuration = primary.Length;
             }
+
+            if (yuhuSound.HasClip && audioSource != null)
+            {
+                yuhuSound.Play(audioSource);
+                if (yuhuSound.Length > longestDuration)
+                    longestDuration = yuhuSound.Length;
+            }
+
+            if (longestDuration > 0f)
+                StartCoroutine(StopGlowAfterClip(longestDuration));
         }
 
         private IEnumerator StopGlowAfterClip(float duration)
@@ -555,18 +657,16 @@ namespace Blackjack
         /// <summary>Plays the lose sound if both clip and source are assigned.</summary>
         private void PlayLoseSound()
         {
-            if (loseSound != null && audioSource != null)
-                audioSource.PlayOneShot(loseSound);
+            loseSound.Play(audioSource);
         }
 
         /// <summary>Plays the tie sound if both clip and source are assigned.</summary>
         private void PlayTieSound()
         {
-            if (tieSound != null && audioSource != null)
-                audioSource.PlayOneShot(tieSound);
+            tieSound.Play(audioSource);
         }
 
-        private void SetButtonState(bool dealEnabled, bool actionEnabled, bool splitEnabled)
+        private void SetButtonState(bool dealEnabled, bool actionEnabled, bool splitEnabled, bool doubleDownEnabled = false)
         {
             dealButton.interactable      = dealEnabled;
             hitButton.interactable       = actionEnabled;
@@ -574,6 +674,8 @@ namespace Blackjack
             surrenderButton.interactable = actionEnabled;
             if (splitButton != null)
                 splitButton.interactable = splitEnabled;
+            if (doubleDownButton != null)
+                doubleDownButton.interactable = doubleDownEnabled;
         }
 
         // ──────────────────────────────────────────────────────────────────────────
