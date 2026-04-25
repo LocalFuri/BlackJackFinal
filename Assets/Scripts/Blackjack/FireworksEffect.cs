@@ -55,6 +55,22 @@ namespace Blackjack
             StartCoroutine(FireworksSequence(anchoredCenter));
         }
 
+        /// <summary>Stops all running fireworks and destroys any remaining particles.</summary>
+        public void Stop()
+        {
+            StopAllCoroutines();
+
+            if (targetCanvas == null) return;
+
+            Transform root = targetCanvas.transform;
+            for (int i = root.childCount - 1; i >= 0; i--)
+            {
+                GameObject child = root.GetChild(i).gameObject;
+                if (child.name.StartsWith("FW_"))
+                    Destroy(child);
+            }
+        }
+
         private IEnumerator FireworksSequence(Vector2 center)
         {
             for (int b = 0; b < burstCount; b++)

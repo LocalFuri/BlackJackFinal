@@ -46,18 +46,26 @@ namespace Blackjack
         [Header("Effects")]
         [SerializeField] private FireworksEffect fireworks;
 
-        [Header("Audio")]
+        [Header("Audio")] //mark audio
         [SerializeField] private AudioSource audioSource;
-        [SerializeField] private SoundEntry startupSound;
-        [SerializeField] private SoundEntry winSound;
-        [SerializeField] private SoundEntry naturalBlackjackSound;
-        [SerializeField] private SoundEntry loseSound;
+
+    [SerializeField] private SoundEntry cheaterSound;
+    [SerializeField] private SoundEntry dealCardSound;
+    [SerializeField] private SoundEntry exitSound;
+    [SerializeField] private SoundEntry knockSound;
+    [SerializeField] private SoundEntry loseSound;
+    [SerializeField] private SoundEntry naturalBlackjackSound;
+    [SerializeField] private SoundEntry startupSound;
+    [SerializeField] private SoundEntry surrenderSound;
+    [SerializeField] private SoundEntry winSound;
+        
+        
         [SerializeField] private SoundEntry tieSound;
-        [SerializeField] private SoundEntry dealCardSound;
+        
         [SerializeField] private SoundEntry yuhuSound;
-        [SerializeField] private SoundEntry cheaterSound;
+        
         [SerializeField] private SoundEntry cardSlideSound;
-        [SerializeField] private SoundEntry exitSound;
+        
 
         [Header("Timing")]
         [SerializeField] private float dealDelay        = 0.45f;
@@ -69,15 +77,22 @@ namespace Blackjack
         // Constants
         // ──────────────────────────────────────────────────────────────────────────
 
-        private const int AutoStandThreshold = 16;
+        private const int AutoStandHard      = 17;
+        private const int AutoStandSoft      = 19;
+        private const int AutoHitMaxScore    = 11;
         private const int DealerSoft17       = 17;
         private const int BlackjackValue     = 21;
 
-        // ──────────────────────────────────────────────────────────────────────────
-        // State
-        // ──────────────────────────────────────────────────────────────────────────
+        private static readonly Color WinStatusColor = new Color(1f, 0f, 0f, 1f);        //gold
+        private static readonly Color WinColor = new Color(0f, 1f, 0f, 1f);              //green
+        private static readonly Color LoseColor = new Color(1f, 0f, 0f, 1f);             //red
+        private static readonly Color PushColor = new Color(0.7f, 0f, 0.7f, 1f);        //magenta
+        private static readonly Color SurrenderColor = new Color(0f, 1f, 1f, 1f);       //cyan
+    // ──────────────────────────────────────────────────────────────────────────
+    // State
+    // ──────────────────────────────────────────────────────────────────────────
 
-        private readonly Deck _deck          = new();
+      private readonly Deck _deck          = new();
         private readonly Hand _playerHand    = new();
         private readonly Hand _dealerHand    = new();
         private readonly Hand _splitHand     = new();
@@ -93,6 +108,12 @@ namespace Blackjack
         private bool _forceSplitHand;
         private bool _isSplitRound;
         private int  _activeHandIndex; // 0 = player, 1 = split
+
+        private TextMeshProUGUI _splitScoreLabel;
+        private Vector2 _defaultPlayerScorePosition;
+        private ScoreLabelPulse _playerScorePulse;
+        private ScoreLabelPulse _splitScorePulse;
+        private Color _defaultStatusColor;
 
         private Hand           ActiveHand  => _activeHandIndex == 0 ? _playerHand  : _splitHand;
         private List<CardView> ActiveViews => _activeHandIndex == 0 ? _playerCardViews : _splitCardViews;
@@ -110,8 +131,11 @@ namespace Blackjack
                 startupSound.Play(audioSource);
 
             _deck.Build();
+            _defaultStatusColor = statusLabel.color;
+            InitSplitScoreLabel();
+            SetScoreLabelsVisible(false);
             SetButtonState(dealEnabled: true, actionEnabled: false, splitEnabled: false);
-            SetStatus("Press Deal to start.");
+            SetStatus("Press Deal to start");
         }
 
         // ──────────────────────────────────────────────────────────────────────────
@@ -132,7 +156,9 @@ namespace Blackjack
         /// <summary>Starts a new round.</summary>
         public void OnDeal()
         {
-            if (_state != GameState.Idle) return;
+            if (_state != GameState.Idle && _state != GameState.RoundOver) return;
+            StopBlackjackCelebration();
+            _state = GameState.Idle;
             StartCoroutine(DealRound());
         }
 
@@ -165,8 +191,9 @@ namespace Blackjack
             yield return StartCoroutine(RevealHoleCard());
             UpdateScoreLabels(revealDealer: true);
 
-            PlayLoseSound();
-            SetStatus("Surrendered. You recover half your bet.");
+            
+      surrenderSound.Play(audioSource);
+      SetStatus("Surrendered recovererd half of your bet", SurrenderColor);
 
             yield return StartCoroutine(EndRound());
         }
@@ -196,7 +223,9 @@ namespace Blackjack
         /// <summary>Forces the next deal to give the player a natural blackjack, then starts the round.</summary>
         public void OnBlackjackTest()
         {
-            if (_state != GameState.Idle) return;
+            if (_state != GameState.Idle && _state != GameState.RoundOver) return;
+            StopBlackjackCelebration();
+            _state = GameState.Idle;
             _forcePlayerBlackjack = true;
             StartCoroutine(DealRound());
         }
@@ -204,7 +233,9 @@ namespace Blackjack
         /// <summary>Forces the next deal to give the player two 5s, enabling the split button.</summary>
         public void OnSplitTest()
         {
-            if (_state != GameState.Idle) return;
+            if (_state != GameState.Idle && _state != GameState.RoundOver) return;
+            StopBlackjackCelebration();
+            _state = GameState.Idle;
             _forceSplitHand = true;
             StartCoroutine(DealRound());
         }
@@ -212,7 +243,9 @@ namespace Blackjack
         /// <summary>Forces the next deal to give both player and dealer a natural blackjack, then starts the round.</summary>
         public void OnBothBlackjackTest()
         {
-            if (_state != GameState.Idle) return;
+            if (_state != GameState.Idle && _state != GameState.RoundOver) return;
+            StopBlackjackCelebration();
+            _state = GameState.Idle;
             _forceBothBlackjack = true;
             StartCoroutine(DealRound());
         }
@@ -233,8 +266,9 @@ namespace Blackjack
             if (_forceSplitHand)       { _deck.ForceSplitHand();       _forceSplitHand       = false; }
 
             ClearTable();
+            SetStatus("");
             yield return new WaitForSeconds(newRoundPause);
-            SetStatus("Dealing...");
+            //SetStatus("Dealing...");
 
             yield return StartCoroutine(DealCardTo(_playerHand, _playerCardViews, playerCardArea, faceUp: true));
             yield return StartCoroutine(DealCardTo(_dealerHand, _dealerCardViews, dealerCardArea, faceUp: true));
@@ -253,9 +287,9 @@ namespace Blackjack
                 yield return StartCoroutine(RevealHoleCard());
                 UpdateScoreLabels(revealDealer: true);
 
-                if (playerBJ && dealerBJ)  { cheaterSound.Play(audioSource); SetStatus("Both Blackjack! Push."); }
-                else if (playerBJ)         { ApplyBlackjackGlow(); fireworks.Play(GetPlayerCardsCenter()); PlayNaturalBlackjackSound(); SetStatus("Blackjack! Player wins!"); }
-                else                       { PlayLoseSound();   SetStatus("Dealer Blackjack! Dealer wins."); }
+                if (playerBJ && dealerBJ)  { cheaterSound.Play(audioSource); SetStatus("Push", PushColor); }
+                else if (playerBJ)         { ApplyBlackjackGlow(); fireworks.Play(GetPlayerCardsCenter()); PlayNaturalBlackjackSound(); SetStatus("You win", WinColor); }
+                else                       { PlayLoseSound();   SetStatus("You lose", LoseColor); }
 
                 yield return StartCoroutine(EndRound());
                 yield break;
@@ -263,10 +297,24 @@ namespace Blackjack
 
             // ── Player turn ──
             SetButtonState(dealEnabled: false, actionEnabled: true, splitEnabled: CanSplit(), doubleDownEnabled: CanDoubleDown());
-            SetStatus($"Your turn. Score: {_playerHand.BestValue()}");
+            SetStatus($"Your turn");
 
-            if (_playerHand.BestValue() >= AutoStandThreshold)
+            bool hasPair = CanSplit();
+
+            if (!hasPair && _playerHand.BestValue() <= AutoHitMaxScore)
             {
+                yield return new WaitForSeconds(0.3f);
+                yield return StartCoroutine(AutoHitLoop());
+                yield break;
+            }
+
+            bool shouldStand = hasPair
+                ? _playerHand.BestValue() == 20
+                : ShouldAutoStand(_playerHand);
+
+            if (shouldStand)
+            {
+                knockSound.Play(audioSource);
                 yield return new WaitForSeconds(0.3f);
                 yield return StartCoroutine(DealerTurn());
             }
@@ -317,10 +365,18 @@ namespace Blackjack
             }
 
             SetButtonState(dealEnabled: false, actionEnabled: true, splitEnabled: false);
-            SetStatus($"Hand 1. Score: {ActiveHand.BestValue()}");
+            SetStatus($"Players turn Hand 1");
 
-            if (ActiveHand.BestValue() >= AutoStandThreshold)
+            if (ActiveHand.BestValue() <= AutoHitMaxScore)
             {
+                yield return new WaitForSeconds(0.3f);
+                yield return StartCoroutine(AutoHitLoop());
+                yield break;
+            }
+
+            if (ShouldAutoStand(ActiveHand))
+            {
+                knockSound.Play(audioSource);
                 yield return new WaitForSeconds(0.3f);
                 yield return StartCoroutine(AdvanceOrDealerTurn());
             }
@@ -348,7 +404,7 @@ namespace Blackjack
                 yield return StartCoroutine(RevealHoleCard());
                 UpdateScoreLabels(revealDealer: true);
                 PlayLoseSound();
-                SetStatus($"Bust with {ActiveHand.BestValue()}! Dealer wins.");
+                SetStatus($"Busted, LoseColor");
                 yield return StartCoroutine(EndRound());
                 yield break;
             }
@@ -364,11 +420,17 @@ namespace Blackjack
             {
                 _activeHandIndex = 1;
                 UpdateScoreLabels(revealDealer: false);
-                SetStatus($"Hand 2. Score: {ActiveHand.BestValue()}");
+                SetStatus($"Players turn Hand 2");
                 SetButtonState(dealEnabled: false, actionEnabled: true, splitEnabled: false);
 
-                if (ActiveHand.BestValue() >= AutoStandThreshold)
+                if (ActiveHand.BestValue() <= AutoHitMaxScore)
                 {
+                    yield return new WaitForSeconds(0.3f);
+                    yield return StartCoroutine(AutoHitLoop());
+                }
+                else if (ShouldAutoStand(ActiveHand))
+                {
+                    knockSound.Play(audioSource);
                     yield return new WaitForSeconds(0.3f);
                     yield return StartCoroutine(DealerTurn());
                 }
@@ -376,6 +438,19 @@ namespace Blackjack
             else
             {
                 yield return StartCoroutine(DealerTurn());
+            }
+        }
+
+        /// <summary>Automatically hits until the score exceeds AutoHitMaxScore, then returns control to the player or proceeds with auto-stand logic.</summary>
+        private IEnumerator AutoHitLoop()
+        {
+            while (ActiveHand.BestValue() <= AutoHitMaxScore)
+            {
+                yield return StartCoroutine(PlayerHit());
+
+                int score = ActiveHand.BestValue();
+                if (score > BlackjackValue || score == BlackjackValue || ShouldAutoStand(ActiveHand))
+                    yield break;
             }
         }
 
@@ -392,7 +467,7 @@ namespace Blackjack
             if (score > BlackjackValue)
             {
                 string label = _isSplitRound ? $"Hand {_activeHandIndex + 1} busts" : "Bust";
-                SetStatus($"{label}! You scored {score}.");
+                SetStatus($"{label}");
                 PlayLoseSound();
 
                 if (_isSplitRound)
@@ -409,23 +484,33 @@ namespace Blackjack
                 yield break;
             }
 
-            if (score == BlackjackValue || score >= AutoStandThreshold)
+            if (score == BlackjackValue || ShouldAutoStand(ActiveHand))
             {
+                if (score != BlackjackValue)
+                    knockSound.Play(audioSource);
                 yield return new WaitForSeconds(0.25f);
                 yield return StartCoroutine(AdvanceOrDealerTurn());
                 yield break;
             }
 
+            if (score <= AutoHitMaxScore)
+            {
+                yield return new WaitForSeconds(0.3f);
+                yield return StartCoroutine(PlayerHit());
+                yield break;
+            }
+
             SetButtonState(dealEnabled: false, actionEnabled: true, splitEnabled: false);
             SetStatus(_isSplitRound
-                ? $"Hand {_activeHandIndex + 1}. Score: {score}"
-                : $"Your turn. Score: {score}");
+                ? $"Players turn Hand 1"
+                : $"Your turn");
         }
 
         private IEnumerator DealerTurn()
         {
             _state = GameState.DealerTurn;
             SetButtonState(dealEnabled: false, actionEnabled: false, splitEnabled: false);
+            StopAllScorePulses();
 
             yield return StartCoroutine(RevealHoleCard());
             UpdateScoreLabels(revealDealer: true);
@@ -437,7 +522,7 @@ namespace Blackjack
 
             if (!allPlayerHandsBusted)
             {
-                SetStatus("Dealer's turn...");
+                SetStatus("Dealer's turn");
                 yield return new WaitForSeconds(dealerPauseDelay);
 
                 while (ShouldDealerHit())
@@ -479,10 +564,25 @@ namespace Blackjack
                 for (int i = 0; i < hands.Length; i++)
                 {
                     int s = hands[i].BestValue();
-                    if      (s > BlackjackValue)            { results.Add($"{labels[i]}: Bust"); anyLoss = true; }
-                    else if (dealerBust || s > dealerScore) { results.Add($"{labels[i]}: Win");  anyWin  = true; }
-                    else if (s < dealerScore)               { results.Add($"{labels[i]}: Loss"); anyLoss = true; }
-                    else                                    { results.Add($"{labels[i]}: Push"); }
+                    if (s > BlackjackValue)
+                    {
+                        results.Add(ColorizeText($"{labels[i]}: Bust", LoseColor));
+                        anyLoss = true;
+                    }
+                    else if (dealerBust || s > dealerScore)
+                    {
+                        results.Add(ColorizeText($"{labels[i]}: Win", WinColor));
+                        anyWin = true;
+                    }
+                    else if (s < dealerScore)
+                    {
+                        results.Add(ColorizeText($"{labels[i]}: Lose", LoseColor));
+                        anyLoss = true;
+                    }
+                    else
+                    {
+                        results.Add(ColorizeText($"{labels[i]}: Push", PushColor));
+                    }
                 }
 
                 if (anyWin)       PlayWinSound();
@@ -494,10 +594,10 @@ namespace Blackjack
             else
             {
                 int p = _playerHand.BestValue();
-                if      (dealerBust)         { PlayWinSound();  SetStatus($"Dealer busts at {dealerScore}! You win!"); }
-                else if (p > dealerScore)    { PlayWinSound();  SetStatus($"You win! {p} vs {dealerScore}."); }
-                else if (dealerScore > p)    { PlayLoseSound(); SetStatus($"Dealer wins. {dealerScore} vs {p}."); }
-                else                         { PlayTieSound();  SetStatus($"Push! Both scored {p}."); }
+                if      (dealerBust)         { PlayWinSound();  SetStatus($"You win", WinColor); }
+                else if (p > dealerScore)    { PlayWinSound();  SetStatus($"You win", WinColor); }
+                else if (dealerScore > p)    { PlayLoseSound(); SetStatus($"You lose",LoseColor); }
+                else                         { PlayTieSound();  SetStatus($"Push",PushColor); }
             }
 
             yield return StartCoroutine(EndRound());
@@ -567,37 +667,163 @@ namespace Blackjack
                 v.StartGlowPulse();
         }
 
+        /// <summary>Stops fireworks, all audio, and card glow pulses from a blackjack celebration.</summary>
+        private void StopBlackjackCelebration()
+        {
+            fireworks.Stop();
+
+            if (audioSource != null)
+                audioSource.Stop();
+
+            foreach (CardView v in _playerCardViews)
+                v.StopGlowPulse();
+        }
+
         // ──────────────────────────────────────────────────────────────────────────
         // UI Helpers
         // ──────────────────────────────────────────────────────────────────────────
 
         private void UpdateScoreLabels(bool revealDealer)
         {
+            SetScoreLabelsVisible(true);
+
             if (_isSplitRound)
             {
                 int p1 = _playerHand.BestValue();
                 int p2 = _splitHand.BestValue();
                 string s1 = p1 > BlackjackValue ? "Bust" : p1.ToString();
                 string s2 = p2 > BlackjackValue ? "Bust" : p2.ToString();
-                playerScoreLabel.text = $"Player: {s1} / {s2}";
+
+                PositionLabelLeftOfArea(playerScoreLabel, playerCardArea);
+                playerScoreLabel.text = s1;
+
+                PositionLabelLeftOfArea(_splitScoreLabel, splitCardArea);
+                _splitScoreLabel.text = s2;
+
+                if (_state == GameState.PlayerTurn)
+                    UpdateSplitScorePulse();
+                else
+                    StopAllScorePulses();
             }
             else
             {
-                playerScoreLabel.text = $"Player: {_playerHand.BestValue()}";
+                ResetPlayerScoreLabelPosition();
+                StopAllScorePulses();
+                playerScoreLabel.text = $"{_playerHand.BestValue()}";
             }
 
             if (revealDealer)
-                dealerScoreLabel.text = $"Dealer: {_dealerHand.BestValue()}";
+                dealerScoreLabel.text = $"{_dealerHand.BestValue()}";
             else
             {
                 int visibleValue = _dealerHand.Cards.Count > 0
                     ? _dealerHand.Cards[0].BlackjackValue
                     : 0;
-                dealerScoreLabel.text = $"Dealer: {visibleValue} + ?";
+                dealerScoreLabel.text = $"{visibleValue}";
             }
         }
 
-        private void SetStatus(string message) => statusLabel.text = message;
+        /// <summary>Sets the status label text and resets its color to the default.</summary>
+        private void SetStatus(string message)
+        {
+            statusLabel.text = message;
+            statusLabel.color = _defaultStatusColor;
+        }
+
+        /// <summary>Sets the status label text with a specific color.</summary>
+        private void SetStatus(string message, Color color)
+        {
+            statusLabel.text = message;
+            statusLabel.color = color;
+        }
+
+        /// <summary>Wraps text in TMP rich text color tags.</summary>
+        private static string ColorizeText(string text, Color color)
+        {
+            string hex = ColorUtility.ToHtmlStringRGBA(color);
+            return $"<color=#{hex}>{text}</color>";
+        }
+
+        /// <summary>Shows or hides all score labels including the split label.</summary>
+        private void SetScoreLabelsVisible(bool visible)
+        {
+            playerScoreLabel.gameObject.SetActive(visible);
+            dealerScoreLabel.gameObject.SetActive(visible);
+
+            if (_splitScoreLabel != null)
+                _splitScoreLabel.gameObject.SetActive(visible && _isSplitRound);
+        }
+
+        /// <summary>Returns true when the given hand should automatically stand (hard 17+ or soft 19+).</summary>
+        private bool ShouldAutoStand(Hand hand)
+        {
+            int score = hand.BestValue();
+            if (hand.IsSoft())
+                return score >= AutoStandSoft;
+            return score >= AutoStandHard;
+        }
+
+        /// <summary>Creates the split score label by cloning the player score label and adds pulse components.</summary>
+        private void InitSplitScoreLabel()
+        {
+            RectTransform playerScoreRT = playerScoreLabel.GetComponent<RectTransform>();
+            _defaultPlayerScorePosition = playerScoreRT.anchoredPosition;
+
+            GameObject splitLabelObj = Instantiate(playerScoreLabel.gameObject, playerScoreLabel.transform.parent);
+            splitLabelObj.name = "SplitScoreLabel";
+            _splitScoreLabel = splitLabelObj.GetComponent<TextMeshProUGUI>();
+            _splitScoreLabel.text = "";
+            splitLabelObj.SetActive(false);
+
+            _playerScorePulse = playerScoreLabel.gameObject.AddComponent<ScoreLabelPulse>();
+            _splitScorePulse  = splitLabelObj.AddComponent<ScoreLabelPulse>();
+        }
+
+        /// <summary>Positions a score label to the left of the given card area, vertically centered.</summary>
+        private void PositionLabelLeftOfArea(TextMeshProUGUI label, Transform cardArea)
+        {
+            RectTransform labelRT = label.GetComponent<RectTransform>();
+            RectTransform areaRT  = cardArea.GetComponent<RectTransform>();
+
+            float areaCenterY = areaRT.anchoredPosition.y + areaRT.sizeDelta.y * 0.5f;
+            float labelHalfHeight = labelRT.sizeDelta.y * 0.5f;
+
+            labelRT.anchorMin = areaRT.anchorMin;
+            labelRT.anchorMax = areaRT.anchorMax;
+            labelRT.anchoredPosition = new Vector2(
+                _defaultPlayerScorePosition.x,
+                areaCenterY - labelHalfHeight
+            );
+        }
+
+        /// <summary>Resets the player score label to its original position.</summary>
+        private void ResetPlayerScoreLabelPosition()
+        {
+            RectTransform playerScoreRT = playerScoreLabel.GetComponent<RectTransform>();
+            playerScoreRT.anchoredPosition = _defaultPlayerScorePosition;
+        }
+
+        /// <summary>Pulses the active hand's score label and dims the inactive one.</summary>
+        private void UpdateSplitScorePulse()
+        {
+            if (_activeHandIndex == 0)
+            {
+                _playerScorePulse.StartPulse();
+                _splitScorePulse.StopPulse();
+            }
+            else
+            {
+                _playerScorePulse.StopPulse();
+                _splitScorePulse.StartPulse();
+            }
+        }
+
+        /// <summary>Stops all score label pulses and resets their alpha.</summary>
+        private void StopAllScorePulses()
+        {
+            _playerScorePulse.StopPulse();
+            _splitScorePulse.StopPulse();
+        }
 
         /// <summary>Returns the center of the first two player cards in the fireworks RectTransform's local space.</summary>
         private Vector2 GetPlayerCardsCenter()
@@ -694,6 +920,9 @@ namespace Blackjack
             _dealerHoleCardView = null;
             _isSplitRound    = false;
             _activeHandIndex = 0;
+            StopAllScorePulses();
+            ResetPlayerScoreLabelPosition();
+            SetScoreLabelsVisible(false);
 
             foreach (CardView v in _playerCardViews) if (v != null) Destroy(v.gameObject);
             _playerCardViews.Clear();
