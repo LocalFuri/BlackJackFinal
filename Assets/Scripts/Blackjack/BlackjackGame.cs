@@ -62,6 +62,8 @@ namespace Blackjack
         [Header("Timing")]
         [SerializeField] private float dealDelay        = 0.45f;
         [SerializeField] private float dealerPauseDelay = 0.7f;
+        [SerializeField] private float endRoundDelay    = 3.0f;
+        [SerializeField] private float newRoundPause    = 0.5f;
 
         // ──────────────────────────────────────────────────────────────────────────
         // Constants
@@ -231,6 +233,7 @@ namespace Blackjack
             if (_forceSplitHand)       { _deck.ForceSplitHand();       _forceSplitHand       = false; }
 
             ClearTable();
+            yield return new WaitForSeconds(newRoundPause);
             SetStatus("Dealing...");
 
             yield return StartCoroutine(DealCardTo(_playerHand, _playerCardViews, playerCardArea, faceUp: true));
@@ -503,7 +506,8 @@ namespace Blackjack
         private IEnumerator EndRound()
         {
             _state = GameState.RoundOver;
-            yield return new WaitForSeconds(1.5f);
+            SetButtonState(dealEnabled: false, actionEnabled: false, splitEnabled: false);
+            yield return new WaitForSeconds(endRoundDelay);
             _state = GameState.Idle;
             SetButtonState(dealEnabled: true, actionEnabled: false, splitEnabled: false);
         }

@@ -1,10 +1,10 @@
 fileFormatVersion: 2
-guid: e6805b738b4af664ba37539b67ad0022
+guid: 52f29e12d0658e24cb9f9565fcd6d357
 TextureImporter:
   internalIDToNameTable:
   - first:
-      213: -2693024420484905890
-    second: DealerPic_0
+      213: 1717595194434587223
+    second: PlayerImage_0
   externalObjects: {}
   serializedVersion: 13
   mipmaps:
@@ -100,13 +100,13 @@ TextureImporter:
     serializedVersion: 2
     sprites:
     - serializedVersion: 2
-      name: DealerPic_0
+      name: PlayerImage_0
       rect:
         serializedVersion: 2
-        x: 1
-        y: 4
-        width: 755
-        height: 1134
+        x: 0
+        y: 104
+        width: 997
+        height: 1432
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -115,8 +115,8 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: e548b8dce8470aad0800000000000000
-      internalID: -2693024420484905890
+      spriteID: 75a0138aabf16d710800000000000000
+      internalID: 1717595194434587223
       vertices: []
       indices: 
       edges: []
@@ -125,7 +125,7 @@ TextureImporter:
     customData: 
     physicsShape: []
     bones: []
-    spriteID: 5e97eb03825dee720800000000000000
+    spriteID: 
     internalID: 0
     vertices: []
     indices: 
@@ -135,7 +135,7 @@ TextureImporter:
     spriteCustomMetadata:
       entries: []
     nameFileIdTable:
-      DealerPic_0: -2693024420484905890
+      PlayerImage_0: 1717595194434587223
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 

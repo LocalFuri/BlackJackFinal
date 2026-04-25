@@ -40,7 +40,7 @@ namespace Blackjack
 #if UNITY_EDITOR
             UnityEditor.EditorApplication.isPlaying = false;
 #else
-            Application.Quit();
+            Application.Quit(); //will only excecute if in build mode 
 #endif
         }
     }
