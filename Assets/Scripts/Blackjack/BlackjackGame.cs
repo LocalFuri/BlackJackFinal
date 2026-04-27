@@ -43,6 +43,11 @@ namespace Blackjack
         [Header("Status")]
         [SerializeField] private TextMeshProUGUI statusLabel;
 
+        [Header("Money")]
+        [SerializeField] private TextMeshProUGUI playerMoneyLabel;
+        [SerializeField] private ChipBetting chipBetting;
+        [SerializeField] private int startingMoney = 1000;
+
         [Header("Effects")]
         [SerializeField] private FireworksEffect fireworks;
 
@@ -106,6 +111,8 @@ namespace Blackjack
         private bool _isSplitRound;
         private int  _activeHandIndex; // 0 = player, 1 = split
 
+        private int _playerMoney;
+
         private TextMeshProUGUI _splitScoreLabel;
         private Vector2 _defaultPlayerScorePosition;
         private ScoreLabelPulse _playerScorePulse;
@@ -164,12 +171,24 @@ namespace Blackjack
             if (startupSound.HasClip && audioSource != null)
                 startupSound.Play(audioSource);
 
+            _playerMoney = startingMoney;
+            RefreshMoneyLabel();
+
+            if (chipBetting != null)
+                chipBetting.OnBetChanged += OnBetChangedHandler;
+
             _deck.Build();
             _defaultStatusColor = statusLabel.color;
             InitSplitScoreLabel();
             SetScoreLabelsVisible(false);
             SetButtonState(dealEnabled: true, actionEnabled: false, splitEnabled: false);
             SetStatus("Press Deal to start");
+        }
+
+        private void OnDestroy()
+        {
+            if (chipBetting != null)
+                chipBetting.OnBetChanged -= OnBetChangedHandler;
         }
 
         // ──────────────────────────────────────────────────────────────────────────
@@ -227,7 +246,8 @@ namespace Blackjack
 
             
       surrenderSound.Play(audioSource);
-      SetStatus("Surrendered recovererd half of your bet", SurrenderColor);
+      SetStatus("Surrender returns half of your bet", SurrenderColor);
+      ApplyPayout(PayoutResult.Surrender, CurrentBet);
 
             yield return StartCoroutine(EndRound());
         }
@@ -321,9 +341,9 @@ namespace Blackjack
                 yield return StartCoroutine(RevealHoleCard());
                 UpdateScoreLabels(revealDealer: true);
 
-                if (playerBJ && dealerBJ)  { cheaterSound.Play(audioSource); SetStatus("Push", PushColor); }
-                else if (playerBJ)         { ApplyBlackjackGlow(); fireworks.Play(GetPlayerCardsCenter()); PlayNaturalBlackjackSound(); SetStatus("You win", WinColor); }
-                else                       { PlayLoseSound();   SetStatus("You lose", LoseColor); }
+                if (playerBJ && dealerBJ)  { cheaterSound.Play(audioSource); SetStatus("Push", PushColor); ApplyPayout(PayoutResult.Push, CurrentBet); }
+                else if (playerBJ)         { ApplyBlackjackGlow(); fireworks.Play(GetPlayerCardsCenter()); PlayNaturalBlackjackSound(); SetStatus("You win", WinColor); ApplyPayout(PayoutResult.BlackjackWin, CurrentBet); }
+                else                       { PlayLoseSound();   SetStatus("You lose", LoseColor); ApplyPayout(PayoutResult.Lose, CurrentBet); }
 
                 yield return StartCoroutine(EndRound());
                 yield break;
@@ -581,6 +601,51 @@ namespace Blackjack
             return false;
         }
 
+        // ──────────────────────────────────────────────────────────────────────────
+        // Money / Payout
+        // ──────────────────────────────────────────────────────────────────────────
+
+        private static readonly System.Globalization.CultureInfo GermanCulture =
+            System.Globalization.CultureInfo.GetCultureInfo("de-DE");
+
+        private enum PayoutResult { Win, BlackjackWin, Lose, Push, Surrender }
+
+        /// <summary>
+        /// Receives live bet delta from ChipBetting and adjusts the player balance immediately.
+        /// Positive delta = chip placed, negative = chip removed.
+        /// </summary>
+        private void OnBetChangedHandler(int delta)
+        {
+            _playerMoney -= delta; // deduct on place, refund on remove
+            RefreshMoneyLabel();
+        }
+
+        /// <summary>
+        /// Applies end-of-round payout. The bet was already deducted when placed,
+        /// so payouts return the appropriate amount to the balance.
+        /// Win → bet×2 | BJ → bet×2.5 | Push → bet | Surrender → bet÷2 | Lose → 0
+        /// </summary>
+        private void ApplyPayout(PayoutResult result, int bet)
+        {
+            _playerMoney += result switch
+            {
+                PayoutResult.Win          => bet * 2,
+                PayoutResult.BlackjackWin => bet * 2 + bet / 2,  // 2.5× (rounded down)
+                PayoutResult.Push         => bet,
+                PayoutResult.Surrender    => bet / 2,
+                _                         => 0,                   // Lose — bet already gone
+            };
+            RefreshMoneyLabel();
+        }
+
+        private void RefreshMoneyLabel()
+        {
+            if (playerMoneyLabel == null) return;
+            playerMoneyLabel.text = $"€ {((decimal)_playerMoney).ToString("N2", GermanCulture)}";
+        }
+
+        private int CurrentBet => chipBetting != null ? chipBetting.TotalBet : 0;
+
         private IEnumerator ResolveRound()
         {
             int dealerScore = _dealerHand.BestValue();
@@ -598,24 +663,29 @@ namespace Blackjack
                 for (int i = 0; i < hands.Length; i++)
                 {
                     int s = hands[i].BestValue();
+                    int handBet = CurrentBet / 2;
                     if (s > BlackjackValue)
                     {
                         results.Add(ColorizeText($"{labels[i]}: Bust", LoseColor));
                         anyLoss = true;
+                        ApplyPayout(PayoutResult.Lose, handBet);
                     }
                     else if (dealerBust || s > dealerScore)
                     {
                         results.Add(ColorizeText($"{labels[i]}: Win", WinColor));
                         anyWin = true;
+                        ApplyPayout(PayoutResult.Win, handBet);
                     }
                     else if (s < dealerScore)
                     {
                         results.Add(ColorizeText($"{labels[i]}: Lose", LoseColor));
                         anyLoss = true;
+                        ApplyPayout(PayoutResult.Lose, handBet);
                     }
                     else
                     {
                         results.Add(ColorizeText($"{labels[i]}: Push", PushColor));
+                        ApplyPayout(PayoutResult.Push, handBet);
                     }
                 }
 
@@ -628,10 +698,10 @@ namespace Blackjack
             else
             {
                 int p = _playerHand.BestValue();
-                if      (dealerBust)         { PlayWinSound();  SetStatus($"You win", WinColor); }
-                else if (p > dealerScore)    { PlayWinSound();  SetStatus($"You win", WinColor); }
-                else if (dealerScore > p)    { PlayLoseSound(); SetStatus($"You lose",LoseColor); }
-                else                         { PlayTieSound();  SetStatus($"Push",PushColor); }
+                if      (dealerBust)         { PlayWinSound();  SetStatus($"You win", WinColor);  ApplyPayout(PayoutResult.Win,  CurrentBet); }
+                else if (p > dealerScore)    { PlayWinSound();  SetStatus($"You win", WinColor);  ApplyPayout(PayoutResult.Win,  CurrentBet); }
+                else if (dealerScore > p)    { PlayLoseSound(); SetStatus($"You lose",LoseColor); ApplyPayout(PayoutResult.Lose, CurrentBet); }
+                else                         { PlayTieSound();  SetStatus($"Push",PushColor);     ApplyPayout(PayoutResult.Push, CurrentBet); }
             }
 
             yield return StartCoroutine(EndRound());

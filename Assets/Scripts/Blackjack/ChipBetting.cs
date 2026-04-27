@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
@@ -45,6 +47,7 @@ namespace Blackjack
         [SerializeField] private BlackjackGame blackjackGame;
         [SerializeField] private AudioSource audioSource;
         [SerializeField] private SoundEntry chipSound;
+        [SerializeField] private TextMeshProUGUI betSumLabel;
 
         [Header("Layout")]
         [Tooltip("Horizontal spacing between chip type columns.")]
@@ -58,6 +61,16 @@ namespace Blackjack
 
         [Tooltip("Size of each chip image rect in the bet area.")]
         [SerializeField] private Vector2 chipSize = new(60f, 60f);
+
+        // ──────────────────────────────────────────────────────────────────────
+        // Events
+        // ──────────────────────────────────────────────────────────────────────
+
+        /// <summary>
+        /// Fired whenever the bet amount changes.
+        /// The argument is the signed delta (positive = chip added, negative = chip removed).
+        /// </summary>
+        public event Action<int> OnBetChanged;
 
         // ──────────────────────────────────────────────────────────────────────
         // State
@@ -124,6 +137,8 @@ namespace Blackjack
         /// <summary>Removes all chips from the bet area and resets state.</summary>
         public void ClearBetArea()
         {
+            int refund = TotalBet;
+
             foreach (KeyValuePair<int, List<GameObject>> kvp in _stacks)
                 foreach (GameObject go in kvp.Value)
                     if (go != null) Destroy(go);
@@ -131,6 +146,11 @@ namespace Blackjack
             _stacks.Clear();
             _columnOrder.Clear();
             _chipCounts.Clear();
+
+            if (refund != 0)
+                OnBetChanged?.Invoke(-refund);
+
+            RefreshBetLabel();
         }
 
         // ──────────────────────────────────────────────────────────────────────
@@ -149,9 +169,12 @@ namespace Blackjack
                     return;
             }
 
+            int chipValue = chipTypes[typeIndex].value;
             chipSound.Play(audioSource);
             PlaceChip(typeIndex);
             CheckUpgrade(typeIndex);
+            OnBetChanged?.Invoke(chipValue);
+            RefreshBetLabel();
         }
 
         private void OnChipRightClicked(int typeIndex)
@@ -168,8 +191,11 @@ namespace Blackjack
 
             if (!_stacks.ContainsKey(typeIndex) || _stacks[typeIndex].Count == 0) return;
 
+            int chipValue = chipTypes[typeIndex].value;
             chipSound.Play(audioSource);
             RemoveTopChips(typeIndex, 1);
+            OnBetChanged?.Invoke(-chipValue);
+            RefreshBetLabel();
         }
 
         /// <summary>Places one chip of the given type into the bet area.</summary>
@@ -270,6 +296,9 @@ namespace Blackjack
             go.transform.SetParent(betArea, worldPositionStays: false);
 
             RectTransform rt = go.AddComponent<RectTransform>();
+            rt.anchorMin = new Vector2(0f, 0.5f);
+            rt.anchorMax = new Vector2(0f, 0.5f);
+            rt.pivot     = new Vector2(0f, 0.5f);
             rt.sizeDelta = chipSize;
             rt.localScale = Vector3.one * betChipScale;
             rt.anchoredPosition = new Vector2(x, y);
@@ -296,6 +325,20 @@ namespace Blackjack
                     stack[s].GetComponent<RectTransform>().anchoredPosition = new Vector2(x, s * stackOffsetY);
                 }
             }
+        }
+
+        // ──────────────────────────────────────────────────────────────────────
+        // Label
+        // ──────────────────────────────────────────────────────────────────────
+
+        private static readonly System.Globalization.CultureInfo GermanCulture =
+            System.Globalization.CultureInfo.GetCultureInfo("de-DE");
+
+        /// <summary>Updates the bet sum label to reflect the current total bet value.</summary>
+        private void RefreshBetLabel()
+        {
+            if (betSumLabel == null) return;
+            betSumLabel.text = $"Bet: € {((decimal)TotalBet).ToString("N2", GermanCulture)}";
         }
     }
 }

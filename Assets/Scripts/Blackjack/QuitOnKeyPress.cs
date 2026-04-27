@@ -9,7 +9,7 @@ namespace Blackjack
     /// Plays an exit sound via BlackjackGame before quitting.
     /// In the Editor, stops Play Mode instead.
     /// </summary>
-    public class QuitOnRightClick : MonoBehaviour
+    public class QuitOnKeyPress : MonoBehaviour
     {
         [SerializeField] private BlackjackGame gameManager;
 
