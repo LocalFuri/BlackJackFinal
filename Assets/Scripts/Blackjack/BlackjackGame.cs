@@ -46,10 +46,12 @@ namespace Blackjack
         [Header("Effects")]
         [SerializeField] private FireworksEffect fireworks;
 
-        [Header("Audio")] //mark audio
+        [Header("Audio")] //mark sound
         [SerializeField] private AudioSource audioSource;
 
+    [SerializeField] private SoundEntry cardSlideSound;
     [SerializeField] private SoundEntry cheaterSound;
+    [SerializeField] private SoundEntry chipSound;
     [SerializeField] private SoundEntry dealCardSound;
     [SerializeField] private SoundEntry exitSound;
     [SerializeField] private SoundEntry knockSound;
@@ -57,14 +59,9 @@ namespace Blackjack
     [SerializeField] private SoundEntry naturalBlackjackSound;
     [SerializeField] private SoundEntry startupSound;
     [SerializeField] private SoundEntry surrenderSound;
+    [SerializeField] private SoundEntry tieSound;
     [SerializeField] private SoundEntry winSound;
-        
-        
-        [SerializeField] private SoundEntry tieSound;
-        
-        [SerializeField] private SoundEntry yuhuSound;
-        
-        [SerializeField] private SoundEntry cardSlideSound;
+    [SerializeField] private SoundEntry yuhuSound;
         
 
         [Header("Timing")]
@@ -121,8 +118,45 @@ namespace Blackjack
         private enum GameState { Idle, PlayerTurn, DealerTurn, RoundOver }
         private GameState _state = GameState.Idle;
 
-        // ──────────────────────────────────────────────────────────────────────────
-        // Unity Lifecycle
+        /// <summary>True when the player is allowed to place or remove bets (before a round begins).</summary>
+        public bool IsBettingAllowed => _state == GameState.Idle;
+
+        /// <summary>True when the current round has ended and the table is showing results.</summary>
+        public bool IsRoundOver => _state == GameState.RoundOver;
+
+        /// <summary>
+        /// Transitions from RoundOver back to Idle, clearing the table and prompting the player to bet.
+        /// Called by ChipBetting when the player clicks a chip after a round ends.
+        /// </summary>
+        public void PrepareForBetting()
+        {
+            if (_state != GameState.RoundOver) return;
+
+            foreach (CardView v in _playerCardViews) if (v != null) Destroy(v.gameObject);
+            _playerCardViews.Clear();
+
+            foreach (CardView v in _splitCardViews) if (v != null) Destroy(v.gameObject);
+            _splitCardViews.Clear();
+
+            foreach (CardView v in _dealerCardViews) if (v != null) Destroy(v.gameObject);
+            _dealerCardViews.Clear();
+
+            _playerHand.Clear();
+            _splitHand.Clear();
+            _dealerHand.Clear();
+            _dealerHoleCardView = null;
+            _isSplitRound       = false;
+            _activeHandIndex    = 0;
+
+            StopAllScorePulses();
+            ResetPlayerScoreLabelPosition();
+            SetScoreLabelsVisible(false);
+            SetStatus("Place your bet");
+
+            _state = GameState.Idle;
+        }
+
+
         // ──────────────────────────────────────────────────────────────────────────
 
         private void Start()
@@ -158,7 +192,7 @@ namespace Blackjack
         {
             if (_state != GameState.Idle && _state != GameState.RoundOver) return;
             StopBlackjackCelebration();
-            _state = GameState.Idle;
+            _state = GameState.PlayerTurn; // lock betting immediately before coroutine starts
             StartCoroutine(DealRound());
         }
 
@@ -608,8 +642,8 @@ namespace Blackjack
             _state = GameState.RoundOver;
             SetButtonState(dealEnabled: false, actionEnabled: false, splitEnabled: false);
             yield return new WaitForSeconds(endRoundDelay);
-            _state = GameState.Idle;
             SetButtonState(dealEnabled: true, actionEnabled: false, splitEnabled: false);
+            // State stays RoundOver — chip click or Deal press drives the next transition.
         }
 
         // ──────────────────────────────────────────────────────────────────────────

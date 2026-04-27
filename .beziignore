@@ -1,0 +1,29 @@
+# Unity System-Ordner
+/[Ll]ibrary/
+/[Tt]emp/
+/[Obj]/
+/[Builds]/
+/[Logs]/
+/[UserSettings]/
+
+# Asset Store & Drittanbieter
+Assets/Plugins/
+Assets/TextMesh Pro/
+
+# Binärdateien (KI kann diese nicht verarbeiten)
+*.fbx
+*.obj
+*.png
+*.jpg
+*.tga
+*.mp3
+*.wav
+*.mat
+*.prefab
+*.unity
+*.asset
+
+# Dokumentation
+*.pdf
+*.txt
+*.md

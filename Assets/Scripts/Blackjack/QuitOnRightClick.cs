@@ -18,7 +18,7 @@ namespace Blackjack
         private void Update()
         {
             if (_isQuitting) return;
-            if (Mouse.current != null && Mouse.current.rightButton.wasPressedThisFrame)
+            if (Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame) //qKey etc.
                 StartCoroutine(PlaySoundThenQuit());
         }
 
