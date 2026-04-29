@@ -134,6 +134,22 @@ namespace Blackjack
             }
         }
 
+        /// <summary>
+        /// Places one chip of the lowest available denomination into the bet area
+        /// and fires <see cref="OnBetChanged"/>. Used as a minimum-bet fallback.
+        /// </summary>
+        public void PlaceSmallestChip()
+        {
+            if (chipTypes.Count == 0) return;
+
+            int typeIndex = 0;
+            chipSound.Play(audioSource);
+            PlaceChip(typeIndex);
+            CheckUpgrade(typeIndex);
+            OnBetChanged?.Invoke(chipTypes[typeIndex].value);
+            RefreshBetLabel();
+        }
+
         /// <summary>Removes all chips from the bet area and resets state.</summary>
         public void ClearBetArea()
         {
@@ -338,7 +354,8 @@ namespace Blackjack
         private void RefreshBetLabel()
         {
             if (betSumLabel == null) return;
-            betSumLabel.text = $"Bet: € {((decimal)TotalBet).ToString("N2", GermanCulture)}";
-        }
+            //betSumLabel.text = $"Bet: € {((decimal)TotalBet).ToString("N2", GermanCulture)}";
+            betSumLabel.text = $"Bet: € {TotalBet}";
+    }
     }
 }
