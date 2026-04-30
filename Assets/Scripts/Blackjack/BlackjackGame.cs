@@ -35,6 +35,7 @@ namespace Blackjack
         [SerializeField] private Button surrenderButton;
         [SerializeField] private Button splitButton;
         [SerializeField] private Button doubleDownButton;
+        [SerializeField] private Button ddTestButton;
 
         [Header("Score Labels")]
         [SerializeField] private TextMeshProUGUI playerScoreLabel;
@@ -46,17 +47,18 @@ namespace Blackjack
         [Header("Money")]
         [SerializeField] private TextMeshProUGUI playerMoneyLabel;
         [SerializeField] private ChipBetting chipBetting;
-        [SerializeField] private int startingMoney = 1000;
+        [SerializeField] private int startingMoney = 0;
 
         [Header("Effects")]
         [SerializeField] private FireworksEffect fireworks;
 
-        [Header("Audio")] //mark sound
+        [Header("Audio")] //mark audio
         [SerializeField] private AudioSource audioSource;
 
     [SerializeField] private SoundEntry cardSlideSound;
     [SerializeField] private SoundEntry cheaterSound;
     [SerializeField] private SoundEntry chipSound;
+    [SerializeField] private SoundEntry ddSound;
     [SerializeField] private SoundEntry dealCardSound;
     [SerializeField] private SoundEntry exitSound;
     [SerializeField] private SoundEntry knockSound;
@@ -76,12 +78,12 @@ namespace Blackjack
         [SerializeField] private float newRoundPause    = 0.5f;
 
         // ──────────────────────────────────────────────────────────────────────────
-        // Constants
+        // Constants mark auto
         // ──────────────────────────────────────────────────────────────────────────
 
         private const int AutoStandHard      = 17;
-        private const int AutoStandSoft      = 19;
-        private const int AutoHitMaxScore    = 11;
+        private const int AutoStandSoft      = 18;
+        private const int AutoHitMaxScore    = 0; //disable
         private const int DealerSoft17       = 17;
         private const int BlackjackValue     = 21;
 
@@ -108,6 +110,7 @@ namespace Blackjack
         private bool _forcePlayerBlackjack;
         private bool _forceBothBlackjack;
         private bool _forceSplitHand;
+        private bool _forceDoubleDownTest;
         private bool _isSplitRound;
         private int  _activeHandIndex; // 0 = player, 1 = split
 
@@ -313,6 +316,17 @@ namespace Blackjack
             StartCoroutine(DealRound());
         }
 
+        /// <summary>Forces the next deal to give the player a hard-11 two-card hand (random pair, e.g. 5+6 or 4+7), then starts the round.</summary>
+        public void OnDoubleDownTest()
+        {
+            if (_state != GameState.Idle && _state != GameState.RoundOver) return;
+            StopBlackjackCelebration();
+            _state = GameState.Idle;
+            _forceDoubleDownTest = true;
+  
+            StartCoroutine(DealRound());
+        }
+
         // ──────────────────────────────────────────────────────────────────────────
         // Round Flow
         // ──────────────────────────────────────────────────────────────────────────
@@ -327,11 +341,12 @@ namespace Blackjack
             if (_forceBothBlackjack)   { _deck.ForceBothBlackjack();   _forceBothBlackjack   = false; }
             if (_forcePlayerBlackjack) { _deck.ForcePlayerBlackjack(); _forcePlayerBlackjack = false; }
             if (_forceSplitHand)       { _deck.ForceSplitHand();       _forceSplitHand       = false; }
+            if (_forceDoubleDownTest)  { _deck.ForceDoubleDownTest();  _forceDoubleDownTest  = false; }
 
             ClearTable();
             SetStatus("");
             _doubleDownExtraBet = 0;
-            yield return new WaitForSeconds(newRoundPause);
+            yield return new WaitForSeconds(newRoundPause); //mark1
             //SetStatus("Dealing...");
 
             yield return StartCoroutine(DealCardTo(_playerHand, _playerCardViews, playerCardArea, faceUp: true));
@@ -459,7 +474,8 @@ namespace Blackjack
             _doubleDownExtraBet = CurrentBet;
             _playerMoney -= _doubleDownExtraBet;
             RefreshMoneyLabel();
-
+            chipBetting?.DoubleBetLabel();
+            ddSound.Play(audioSource); //mark dd sound
             yield return StartCoroutine(
                 DealCardTo(ActiveHand, ActiveViews,
                            _activeHandIndex == 0 ? playerCardArea : splitCardArea,

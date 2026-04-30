@@ -356,6 +356,16 @@ namespace Blackjack
             if (betSumLabel == null) return;
             //betSumLabel.text = $"Bet: € {((decimal)TotalBet).ToString("N2", GermanCulture)}";
             betSumLabel.text = $"Bet: € {TotalBet}";
-    }
+        }
+
+        /// <summary>
+        /// Doubles the value shown in the BetSumLabel without altering the actual chip state.
+        /// Called on Double Down to reflect the doubled wager in the UI.
+        /// </summary>
+        public void DoubleBetLabel()
+        {
+            if (betSumLabel == null) return;
+            betSumLabel.text = $"Bet: € {TotalBet * 2}";
+        }
     }
 }

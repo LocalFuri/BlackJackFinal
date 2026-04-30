@@ -78,6 +78,34 @@ namespace Blackjack
             PlaceAtIndex(new CardData(Suit.Hearts, Rank.Five), _cards.Count - 3);
         }
 
+        /// <summary>
+        /// Manipulates the top of the deck so the player's first two cards
+        /// will have a hard total of exactly 11 (no Aces, random suit/rank pair).
+        /// Valid non-Ace pairs that sum to 11: (2,9) (3,8) (4,7) (5,6).
+        /// A random pair is chosen each call.
+        /// </summary>
+        public void ForceDoubleDownTest()
+        {
+            // All non-Ace rank pairs whose blackjack values sum to 11.
+            var pairs = new (Rank a, Rank b)[]
+            {
+                (Rank.Two,   Rank.Nine),
+                (Rank.Three, Rank.Eight),
+                (Rank.Four,  Rank.Seven),
+                (Rank.Five,  Rank.Six),
+            };
+
+            int index = Random.Range(0, pairs.Length);
+            (Rank rankA, Rank rankB) = pairs[index];
+
+            // Choose random suits for variety.
+            Suit suitA = (Suit)Random.Range(0, 4);
+            Suit suitB = (Suit)Random.Range(0, 4);
+
+            PlaceAtIndex(new CardData(suitA, rankA), _cards.Count - 1); // player card 1
+            PlaceAtIndex(new CardData(suitB, rankB), _cards.Count - 3); // player card 2
+        }
+
         /// <summary>Moves a specific card to the given index within the list.</summary>
         private void PlaceAtIndex(CardData target, int desiredIndex)
         {
