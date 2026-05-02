@@ -150,6 +150,38 @@ namespace Blackjack
             RefreshBetLabel();
         }
 
+        /// <summary>
+        /// Duplicates every chip currently in the bet area, doubling the visual stack and
+        /// <see cref="TotalBet"/>. Fires <see cref="OnBetChanged"/> with the added amount
+        /// and refreshes the bet sum label.
+        /// </summary>
+        public void DoubleBetChips()
+        {
+            if (_columnOrder.Count == 0) return;
+
+            // Snapshot current state before we add anything.
+            var snapshotTypes  = new List<int>(_columnOrder);
+            var snapshotCounts = new Dictionary<int, int>(_chipCounts);
+
+            int addedValue = 0;
+
+            foreach (int typeIndex in snapshotTypes)
+            {
+                int count = snapshotCounts[typeIndex];
+                for (int i = 0; i < count; i++)
+                {
+                    PlaceChip(typeIndex);
+                    CheckUpgrade(typeIndex);
+                    addedValue += chipTypes[typeIndex].value;
+                }
+            }
+
+            if (addedValue != 0)
+                OnBetChanged?.Invoke(addedValue);
+
+            RefreshBetLabel();
+        }
+
         /// <summary>Removes all chips from the bet area and resets state.</summary>
         public void ClearBetArea()
         {

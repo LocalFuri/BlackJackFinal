@@ -216,15 +216,34 @@ namespace Blackjack
         {
             if (_state != GameState.Idle && _state != GameState.RoundOver) return;
             StopBlackjackCelebration();
+            StartNewRound();
+        }
 
-            if (chipBetting != null && chipBetting.TotalBet <= 0)
-                chipBetting.PlaceSmallestChip();
-
+        /// <summary>
+        /// Ensures a minimum bet is placed, deducts it from the player's balance, and starts <see cref="DealRound"/>.
+        /// All new-game entry points funnel through here.
+        /// </summary>
+        private void StartNewRound()
+        {
+            EnsureMinimumBet();
             _playerMoney -= CurrentBet;
             RefreshMoneyLabel();
-
-            _state = GameState.PlayerTurn; // lock betting immediately before coroutine starts
+            _state = GameState.PlayerTurn;
             StartCoroutine(DealRound());
+        }
+
+        /// <summary>
+        /// Transitions to Idle if needed and places the smallest chip when <see cref="ChipBetting.TotalBet"/> is zero.
+        /// </summary>
+        private void EnsureMinimumBet()
+        {
+            if (chipBetting == null) return;
+
+            if (_state == GameState.RoundOver)
+                PrepareForBetting();
+
+            if (chipBetting.TotalBet <= 0)
+                chipBetting.PlaceSmallestChip();
         }
 
         /// <summary>Player draws another card.</summary>
@@ -272,6 +291,9 @@ namespace Blackjack
         {
             if (_state != GameState.PlayerTurn) return;
             if (!CanSplit()) return;
+            _playerMoney -= CurrentBet;
+            RefreshMoneyLabel();
+            chipBetting?.DoubleBetChips();
             StartCoroutine(PerformSplit());
         }
 
@@ -293,7 +315,7 @@ namespace Blackjack
             StopBlackjackCelebration();
             _state = GameState.Idle;
             _forcePlayerBlackjack = true;
-            StartCoroutine(DealRound());
+            StartNewRound();
         }
 
         /// <summary>Forces the next deal to give the player two 5s, enabling the split button.</summary>
@@ -303,7 +325,7 @@ namespace Blackjack
             StopBlackjackCelebration();
             _state = GameState.Idle;
             _forceSplitHand = true;
-            StartCoroutine(DealRound());
+            StartNewRound();
         }
 
         /// <summary>Forces the next deal to give both player and dealer a natural blackjack, then starts the round.</summary>
@@ -313,7 +335,7 @@ namespace Blackjack
             StopBlackjackCelebration();
             _state = GameState.Idle;
             _forceBothBlackjack = true;
-            StartCoroutine(DealRound());
+            StartNewRound();
         }
 
         /// <summary>Forces the next deal to give the player a hard-11 two-card hand (random pair, e.g. 5+6 or 4+7), then starts the round.</summary>
@@ -323,8 +345,7 @@ namespace Blackjack
             StopBlackjackCelebration();
             _state = GameState.Idle;
             _forceDoubleDownTest = true;
-  
-            StartCoroutine(DealRound());
+            StartNewRound();
         }
 
         // ──────────────────────────────────────────────────────────────────────────
