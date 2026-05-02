@@ -925,10 +925,16 @@ namespace Blackjack
             RectTransform playerScoreRT = playerScoreLabel.GetComponent<RectTransform>();
             _defaultPlayerScorePosition = playerScoreRT.anchoredPosition;
 
+            // Instantiate with the source active so TMP's internal material/font
+            // state is fully initialized on the clone before we deactivate it.
+            // Deactivating immediately after prevents any Canvas rebuild pass from
+            // running on the clone before it is intentionally shown.
             GameObject splitLabelObj = Instantiate(playerScoreLabel.gameObject, playerScoreLabel.transform.parent);
             splitLabelObj.name = "SplitScoreLabel";
+
             _splitScoreLabel = splitLabelObj.GetComponent<TextMeshProUGUI>();
             _splitScoreLabel.text = "";
+
             splitLabelObj.SetActive(false);
 
             _playerScorePulse = playerScoreLabel.gameObject.AddComponent<ScoreLabelPulse>();
