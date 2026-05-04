@@ -62,6 +62,19 @@ namespace Blackjack
         [Tooltip("Size of each chip image rect in the bet area.")]
         [SerializeField] private Vector2 chipSize = new(60f, 60f);
 
+        [Header("Limits")]
+        [Tooltip("Maximum total bet the player is allowed to place.")]
+        [SerializeField] private int maxBet = 1000;
+
+        private const int DefaultMaxBet = 1000;
+
+        [Header("Buttons")]
+        [Tooltip("Button that resets the bet to the minimum (one lowest-denomination chip).")]
+        [SerializeField] private Button chipResetButton;
+
+        [Tooltip("Sound played when the chip reset button is pressed.")]
+        [SerializeField] private SoundEntry chipResetSound;
+
         // ──────────────────────────────────────────────────────────────────────
         // Events
         // ──────────────────────────────────────────────────────────────────────
@@ -113,6 +126,8 @@ namespace Blackjack
                 });
                 trigger.triggers.Add(entry);
             }
+
+            chipResetButton?.onClick.AddListener(OnChipResetClicked);
         }
 
         // ──────────────────────────────────────────────────────────────────────
@@ -134,6 +149,48 @@ namespace Blackjack
             }
         }
 
+        /// <summary>Maximum total bet the player is allowed to place.</summary>
+        public int MaxBet => maxBet;
+
+        /// <summary>Resets the maximum bet back to the default value of <see cref="DefaultMaxBet"/>.</summary>
+        public void ResetMaxBet() => maxBet = DefaultMaxBet;
+
+        /// <summary>
+        /// Removes chips from the bet area — highest denomination first — until
+        /// <see cref="TotalBet"/> is at or below <see cref="MaxBet"/>.
+        /// Fires <see cref="OnBetChanged"/> for each chip removed and refreshes the label.
+        /// </summary>
+        public void ClampBetToMaxBet()
+        {
+            if (TotalBet <= maxBet) return;
+
+            int removed = 0;
+
+            while (TotalBet > maxBet)
+            {
+                int highestTypeIndex = -1;
+                for (int i = chipTypes.Count - 1; i >= 0; i--)
+                {
+                    if (_stacks.TryGetValue(i, out List<GameObject> stack) && stack.Count > 0)
+                    {
+                        highestTypeIndex = i;
+                        break;
+                    }
+                }
+
+                if (highestTypeIndex == -1) break;
+
+                int chipValue = chipTypes[highestTypeIndex].value;
+                RemoveTopChips(highestTypeIndex, 1);
+                removed += chipValue;
+            }
+
+            if (removed != 0)
+                OnBetChanged?.Invoke(-removed);
+
+            RefreshBetLabel();
+        }
+
         /// <summary>
         /// Places one chip of the lowest available denomination into the bet area
         /// and fires <see cref="OnBetChanged"/>. Used as a minimum-bet fallback.
@@ -147,6 +204,40 @@ namespace Blackjack
             PlaceChip(typeIndex);
             CheckUpgrade(typeIndex);
             OnBetChanged?.Invoke(chipTypes[typeIndex].value);
+            RefreshBetLabel();
+        }
+
+        /// <summary>
+        /// Clears the entire bet area and places exactly one chip of the lowest denomination.
+        /// Fires <see cref="OnBetChanged"/> to reflect the net change in bet value.
+        /// Does not play any sound — callers are responsible for audio.
+        /// </summary>
+        public void ResetToMinimumBet()
+        {
+            if (chipTypes.Count == 0) return;
+
+            int previousBet = TotalBet;
+
+            // Clear all chips without firing the event yet
+            foreach (KeyValuePair<int, List<GameObject>> kvp in _stacks)
+                foreach (GameObject go in kvp.Value)
+                    if (go != null) Destroy(go);
+
+            _stacks.Clear();
+            _columnOrder.Clear();
+            _chipCounts.Clear();
+
+            // Place one minimum chip
+            int typeIndex    = 0;
+            int minimumValue = chipTypes[typeIndex].value;
+            PlaceChip(typeIndex);
+            CheckUpgrade(typeIndex);
+
+            // Fire a single delta: (minimumValue - previousBet)
+            int delta = minimumValue - previousBet;
+            if (delta != 0)
+                OnBetChanged?.Invoke(delta);
+
             RefreshBetLabel();
         }
 
@@ -205,6 +296,22 @@ namespace Blackjack
         // Chip placement
         // ──────────────────────────────────────────────────────────────────────
 
+        private void OnChipResetClicked()
+        {
+            if (blackjackGame != null)
+            {
+                if (blackjackGame.IsRoundOver)
+                {
+                    blackjackGame.PrepareForBetting();
+                    chipResetSound.Play(audioSource);
+                }
+                else if (!blackjackGame.IsBettingAllowed)
+                    return;
+            }
+
+            ResetToMinimumBet();
+        }
+
         private void OnChipClicked(int typeIndex)
         {
             if (typeIndex < 0 || typeIndex >= chipTypes.Count) return;
@@ -218,6 +325,13 @@ namespace Blackjack
             }
 
             int chipValue = chipTypes[typeIndex].value;
+
+            if (TotalBet + chipValue > maxBet)
+            {
+                blackjackGame?.NotifyBetLimitExceeded();
+                return;
+            }
+
             chipSound.Play(audioSource);
             PlaceChip(typeIndex);
             CheckUpgrade(typeIndex);
@@ -387,8 +501,9 @@ namespace Blackjack
         {
             if (betSumLabel == null) return;
             //betSumLabel.text = $"Bet: € {((decimal)TotalBet).ToString("N2", GermanCulture)}";
-            betSumLabel.text = $"Bet: € {TotalBet}";
-        }
+            //betSumLabel.text = $"Bet: € {TotalBet}"; //no separators
+            betSumLabel.text = $"€ {(TotalBet).ToString("N0", GermanCulture)}"; //N2 = decimal digits
+    }
 
         /// <summary>
         /// Doubles the value shown in the BetSumLabel without altering the actual chip state.
@@ -397,7 +512,8 @@ namespace Blackjack
         public void DoubleBetLabel()
         {
             if (betSumLabel == null) return;
-            betSumLabel.text = $"Bet: € {TotalBet * 2}";
-        }
+            //betSumLabel.text = $"Bet: € {TotalBet * 2}"; //no separators
+            betSumLabel.text = $"Bet: € {(TotalBet *2).ToString("N0", GermanCulture)}"; //N2 = decimal digits
+    }
     }
 }

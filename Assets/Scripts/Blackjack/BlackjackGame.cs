@@ -60,6 +60,7 @@ namespace Blackjack
     [SerializeField] private SoundEntry chipSound;
     [SerializeField] private SoundEntry ddSound;
     [SerializeField] private SoundEntry dealCardSound;
+    [SerializeField] private SoundEntry eraseCardSound;
     [SerializeField] private SoundEntry exitSound;
     [SerializeField] private SoundEntry knockSound;
     [SerializeField] private SoundEntry loseSound;
@@ -160,6 +161,7 @@ namespace Blackjack
             _isSplitRound       = false;
             _activeHandIndex    = 0;
 
+            //mark7
             StopAllScorePulses();
             ResetPlayerScoreLabelPosition();
             SetScoreLabelsVisible(false);
@@ -205,6 +207,42 @@ namespace Blackjack
         {
             exitSound.Play(audioSource);
             return exitSound.Length;
+        }
+
+        /// <summary>Plays the knock sound.</summary>
+        public void PlayKnockSound()
+        {
+            knockSound.Play(audioSource);
+        }
+
+        /// <summary>
+        /// Plays the knock sound and pulses "Limit exceeded!" in LoseColor 3 times,
+        /// then restores the previous status label text and color.
+        /// </summary>
+        public void NotifyBetLimitExceeded()
+        {
+            knockSound.Play(audioSource);
+            StartCoroutine(PulseLimitExceeded());
+        }
+
+        private const int LimitPulseCount = 3;
+        private const float LimitPulseDelay = 0.5f;
+
+        private IEnumerator PulseLimitExceeded()
+        {
+            string previousText  = statusLabel.text;
+            Color  previousColor = statusLabel.color;
+
+            for (int i = 0; i < LimitPulseCount; i++)
+            {
+                SetStatus("Limit exceeded!", LoseColor);
+                yield return new WaitForSeconds(LimitPulseDelay);
+                statusLabel.text = string.Empty;
+                yield return new WaitForSeconds(LimitPulseDelay);
+            }
+
+            statusLabel.text  = previousText;
+            statusLabel.color = previousColor;
         }
 
         // ──────────────────────────────────────────────────────────────────────────
@@ -764,6 +802,8 @@ namespace Blackjack
             _state = GameState.RoundOver;
             SetButtonState(dealEnabled: false, actionEnabled: false, splitEnabled: false);
             yield return new WaitForSeconds(endRoundDelay);
+            chipBetting?.ResetMaxBet();
+            chipBetting?.ClampBetToMaxBet();
             SetButtonState(dealEnabled: true, actionEnabled: false, splitEnabled: false);
             // State stays RoundOver — chip click or Deal press drives the next transition.
         }
@@ -782,9 +822,16 @@ namespace Blackjack
             if (dealCardSound.HasClip && audioSource != null)
                 dealCardSound.Play(audioSource);
 
-            CardView view = SpawnCardView(card, area, faceUp);
-
+            // Always spawn face-down, then flip to reveal if this card should be face-up
+            CardView view = SpawnCardView(card, area, faceUp: false);
             views.Add(view);
+
+            if (faceUp)
+            {
+                bool flipDone = false;
+                view.Flip(toFaceUp: true, () => flipDone = true);
+                yield return new WaitUntil(() => flipDone);
+            }
         }
 
         private CardView SpawnCardView(CardData card, Transform parent, bool faceUp)
