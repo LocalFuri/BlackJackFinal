@@ -66,6 +66,7 @@ namespace Blackjack
     [SerializeField] private SoundEntry loseSound;
     [SerializeField] private SoundEntry naturalBlackjackSound;
     [SerializeField] private SoundEntry startupSound;
+    [SerializeField] private SoundEntry resetSound;
     [SerializeField] private SoundEntry surrenderSound;
     [SerializeField] private SoundEntry tieSound;
     [SerializeField] private SoundEntry winSound;
@@ -116,6 +117,7 @@ namespace Blackjack
         private int  _activeHandIndex; // 0 = player, 1 = split
 
         private int _doubleDownExtraBet; // extra bet deducted when doubling down
+        private int _savedBetBeforeAction; // bet amount before split/double-down, restored next round
 
         private decimal _playerMoney; //decimal need for 5 chips / 2 surrendering = 2.5 chips
 
@@ -161,7 +163,13 @@ namespace Blackjack
             _isSplitRound       = false;
             _activeHandIndex    = 0;
 
-            //mark7
+            if (_savedBetBeforeAction > 0 && chipBetting != null)
+            {
+                chipBetting.RestoreBet(_savedBetBeforeAction);
+                _savedBetBeforeAction = 0;
+            }
+
+     
             StopAllScorePulses();
             ResetPlayerScoreLabelPosition();
             SetScoreLabelsVisible(false);
@@ -228,8 +236,13 @@ namespace Blackjack
         private const int LimitPulseCount = 3;
         private const float LimitPulseDelay = 0.5f;
 
+        /// <summary>True while the "Limit exceeded!" pulse animation is running. All input should be suppressed during this window.</summary>
+        public bool IsLimitPulsing { get; private set; }
+
         private IEnumerator PulseLimitExceeded()
         {
+            IsLimitPulsing = true;
+
             string previousText  = statusLabel.text;
             Color  previousColor = statusLabel.color;
 
@@ -243,6 +256,8 @@ namespace Blackjack
 
             statusLabel.text  = previousText;
             statusLabel.color = previousColor;
+
+            IsLimitPulsing = false;
         }
 
         // ──────────────────────────────────────────────────────────────────────────
@@ -264,6 +279,7 @@ namespace Blackjack
         private void StartNewRound()
         {
             EnsureMinimumBet();
+            _savedBetBeforeAction = 0;
             _playerMoney -= CurrentBet;
             RefreshMoneyLabel();
             _state = GameState.PlayerTurn;
@@ -329,6 +345,7 @@ namespace Blackjack
         {
             if (_state != GameState.PlayerTurn) return;
             if (!CanSplit()) return;
+            _savedBetBeforeAction = CurrentBet;
             _playerMoney -= CurrentBet;
             RefreshMoneyLabel();
             chipBetting?.DoubleBetChips();
@@ -530,6 +547,7 @@ namespace Blackjack
             SetButtonState(dealEnabled: false, actionEnabled: false, splitEnabled: false);
             SetStatus("Double Down!");
 
+            _savedBetBeforeAction = CurrentBet;
             _doubleDownExtraBet = CurrentBet;
             _playerMoney -= _doubleDownExtraBet;
             RefreshMoneyLabel();

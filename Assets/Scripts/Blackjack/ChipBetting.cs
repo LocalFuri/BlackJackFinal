@@ -75,15 +75,16 @@ namespace Blackjack
         [Tooltip("Sound played when the chip reset button is pressed.")]
         [SerializeField] private SoundEntry chipResetSound;
 
-        // ──────────────────────────────────────────────────────────────────────
-        // Events
-        // ──────────────────────────────────────────────────────────────────────
 
-        /// <summary>
-        /// Fired whenever the bet amount changes.
-        /// The argument is the signed delta (positive = chip added, negative = chip removed).
-        /// </summary>
-        public event Action<int> OnBetChanged;
+    // ──────────────────────────────────────────────────────────────────────
+    // Events
+    // ──────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Fired whenever the bet amount changes.
+    /// The argument is the signed delta (positive = chip added, negative = chip removed).
+    /// </summary>
+    public event Action<int> OnBetChanged;
 
         // ──────────────────────────────────────────────────────────────────────
         // State
@@ -162,11 +163,10 @@ namespace Blackjack
         /// </summary>
         public void ClampBetToMaxBet()
         {
-            if (TotalBet <= maxBet) return;
-
-            int removed = 0;
-
-            while (TotalBet > maxBet)
+          if (TotalBet <= maxBet) return;
+          int removed = 0;
+        
+        while (TotalBet > maxBet)
             {
                 int highestTypeIndex = -1;
                 for (int i = chipTypes.Count - 1; i >= 0; i--)
@@ -242,6 +242,43 @@ namespace Blackjack
         }
 
         /// <summary>
+        /// Rebuilds the bet area to represent exactly <paramref name="targetAmount"/> using
+        /// the available chip denominations (greedy highest-first). Clears the current chips
+        /// without firing <see cref="OnBetChanged"/>, then places the new chips silently and
+        /// refreshes the bet sum label. Any remainder that cannot be represented exactly is
+        /// ignored (e.g. odd amounts when only even denominations are available).
+        /// </summary>
+        public void RestoreBet(int targetAmount)
+        {
+            if (chipTypes.Count == 0 || targetAmount <= 0) return;
+
+            // Clear existing chips silently (no event)
+            foreach (KeyValuePair<int, List<GameObject>> kvp in _stacks)
+                foreach (GameObject go in kvp.Value)
+                    if (go != null) Destroy(go);
+
+            _stacks.Clear();
+            _columnOrder.Clear();
+            _chipCounts.Clear();
+
+            // Greedy decomposition: highest denomination first
+            int remaining = targetAmount;
+            for (int i = chipTypes.Count - 1; i >= 0 && remaining > 0; i--)
+            {
+                int denomination = chipTypes[i].value;
+                if (denomination <= 0) continue;
+
+                int count = remaining / denomination;
+                remaining -= count * denomination;
+
+                for (int j = 0; j < count; j++)
+                    PlaceChip(i);
+            }
+
+            RefreshBetLabel();
+        }
+
+        /// <summary>
         /// Duplicates every chip currently in the bet area, doubling the visual stack and
         /// <see cref="TotalBet"/>. Fires <see cref="OnBetChanged"/> with the added amount
         /// and refreshes the bet sum label.
@@ -298,18 +335,30 @@ namespace Blackjack
 
         private void OnChipResetClicked()
         {
-            if (blackjackGame != null)
-            {
-                if (blackjackGame.IsRoundOver)
-                {
-                    blackjackGame.PrepareForBetting();
-                    chipResetSound.Play(audioSource);
-                }
-                else if (!blackjackGame.IsBettingAllowed)
-                    return;
-            }
+          if (blackjackGame != null)
+          {
+            if (blackjackGame.IsLimitPulsing)
+              return;
 
-            ResetToMinimumBet();
+            if (blackjackGame.IsRoundOver)
+              blackjackGame.PrepareForBetting();
+            else if (!blackjackGame.IsBettingAllowed)
+              return;
+          }
+
+          if (HasMoreThanMinimumBet())
+            chipResetSound.Play(audioSource);
+          else
+            blackjackGame?.PlayKnockSound();
+
+          ResetToMinimumBet();
+        }
+
+        /// <summary>Returns true when the current total bet exceeds the minimum (one chip of the lowest denomination).</summary>
+        private bool HasMoreThanMinimumBet()
+        {
+          if (chipTypes.Count == 0) return false;
+          return TotalBet > chipTypes[0].value;
         }
 
         private void OnChipClicked(int typeIndex)
@@ -318,6 +367,9 @@ namespace Blackjack
 
             if (blackjackGame != null)
             {
+                if (blackjackGame.IsLimitPulsing)
+                    return;
+
                 if (blackjackGame.IsRoundOver)
                     blackjackGame.PrepareForBetting();
                 else if (!blackjackGame.IsBettingAllowed)
@@ -345,6 +397,9 @@ namespace Blackjack
 
             if (blackjackGame != null)
             {
+                if (blackjackGame.IsLimitPulsing)
+                    return;
+
                 if (blackjackGame.IsRoundOver)
                     blackjackGame.PrepareForBetting();
                 else if (!blackjackGame.IsBettingAllowed)
