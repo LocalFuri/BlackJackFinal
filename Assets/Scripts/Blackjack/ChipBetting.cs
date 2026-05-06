@@ -75,6 +75,9 @@ namespace Blackjack
         [Tooltip("Sound played when the chip reset button is pressed.")]
         [SerializeField] private SoundEntry chipResetSound;
 
+        [Tooltip("Button that sets the bet to the maximum allowed amount.")]
+        [SerializeField] private Button chipMaxButton;
+
 
     // ──────────────────────────────────────────────────────────────────────
     // Events
@@ -129,6 +132,7 @@ namespace Blackjack
             }
 
             chipResetButton?.onClick.AddListener(OnChipResetClicked);
+            chipMaxButton?.onClick.AddListener(OnChipMaxClicked);
         }
 
         // ──────────────────────────────────────────────────────────────────────
@@ -352,6 +356,34 @@ namespace Blackjack
             blackjackGame?.PlayKnockSound();
 
           ResetToMinimumBet();
+        }
+
+        private void OnChipMaxClicked()
+        {
+            if (blackjackGame != null)
+            {
+                if (blackjackGame.IsLimitPulsing)
+                    return;
+
+                if (blackjackGame.IsRoundOver)
+                    blackjackGame.PrepareForBetting();
+                else if (!blackjackGame.IsBettingAllowed)
+                    return;
+            }
+
+            if (TotalBet >= maxBet)
+            {
+                blackjackGame?.NotifyBetLimitExceeded();
+                return;
+            }
+
+            int previousBet = TotalBet;
+            chipResetSound.Play(audioSource);
+            RestoreBet(maxBet);
+
+            int delta = TotalBet - previousBet;
+            if (delta != 0)
+                OnBetChanged?.Invoke(delta);
         }
 
         /// <summary>Returns true when the current total bet exceeds the minimum (one chip of the lowest denomination).</summary>

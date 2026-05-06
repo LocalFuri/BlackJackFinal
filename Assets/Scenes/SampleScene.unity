@@ -1470,9 +1470,6 @@ MonoBehaviour:
   dealCardSound:
     clip: {fileID: 8300000, guid: f6a41ed8c1389984fbc5f1c6ec4ef036, type: 3}
     volume: 1
-  eraseCardSound:
-    clip: {fileID: 8300000, guid: 9a5cb69d75341cf42b545b71a650e7f3, type: 3}
-    volume: 0.45
   exitSound:
     clip: {fileID: 8300000, guid: bb485ef058a851148a35ed664aa421d8, type: 3}
     volume: 0.28
@@ -1487,7 +1484,7 @@ MonoBehaviour:
     volume: 1
   startupSound:
     clip: {fileID: 8300000, guid: d34ed06c2af490041bf76bed5adb015b, type: 3}
-    volume: 0.39
+    volume: 0.15
   resetSound:
     clip: {fileID: 8300000, guid: 1d30d9b75a0f1cd47b88da14c16aa77e, type: 3}
     volume: 0.52
@@ -1503,7 +1500,7 @@ MonoBehaviour:
   yuhuSound:
     clip: {fileID: 8300000, guid: 6f690614cdac7fa428d217185f570c11, type: 3}
     volume: 0.21
-  dealDelay: 0.2
+  dealDelay: 0
   dealerPauseDelay: 0.7
   endRoundDelay: 0
   newRoundPause: 0.5
@@ -1659,8 +1656,9 @@ MonoBehaviour:
   maxBet: 1000
   chipResetButton: {fileID: 287653933}
   chipResetSound:
-    clip: {fileID: 8300000, guid: 9a5cb69d75341cf42b545b71a650e7f3, type: 3}
+    clip: {fileID: 8300000, guid: 1d30d9b75a0f1cd47b88da14c16aa77e, type: 3}
     volume: 1
+  chipMaxButton: {fileID: 1731515873}
 --- !u!114 &383359003
 MonoBehaviour:
   m_ObjectHideFlags: 0

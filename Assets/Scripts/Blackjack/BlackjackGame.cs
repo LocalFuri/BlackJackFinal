@@ -60,7 +60,7 @@ namespace Blackjack
     [SerializeField] private SoundEntry chipSound;
     [SerializeField] private SoundEntry ddSound;
     [SerializeField] private SoundEntry dealCardSound;
-    [SerializeField] private SoundEntry eraseCardSound;
+    //[SerializeField] private SoundEntry eraseCardSound;
     [SerializeField] private SoundEntry exitSound;
     [SerializeField] private SoundEntry knockSound;
     [SerializeField] private SoundEntry loseSound;
@@ -74,7 +74,9 @@ namespace Blackjack
         
 
         [Header("Timing")]
-        [SerializeField] private float dealDelay        = 0.45f;
+
+        [Tooltip("dealDelay ist set to 0.45 in code, you can not change it in the inspector!")]
+        [SerializeField] private float dealDelay        = 0.45f; //default was 0.45
         [SerializeField] private float dealerPauseDelay = 0.7f;
         [SerializeField] private float endRoundDelay    = 3.0f;
         [SerializeField] private float newRoundPause    = 0.5f;
@@ -565,7 +567,7 @@ namespace Blackjack
                 yield return StartCoroutine(RevealHoleCard());
                 UpdateScoreLabels(revealDealer: true);
                 PlayLoseSound();
-                SetStatus($"Busted, LoseColor");
+                SetStatus($"Busted mark99");
                 yield return StartCoroutine(EndRound());
                 yield break;
             }

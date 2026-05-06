@@ -17,7 +17,8 @@ namespace Blackjack
         [SerializeField] private Image glowImage;
 
         [Header("Flip Animation")]
-        [SerializeField] private float flipDuration = 0.35f;
+        [SerializeField] private float flipDuration = 3.5f; //default was 0.35f
+
 
         [Header("Bloom Pulse")]
         [SerializeField] private float breatheSpeed  = 0.7f;   // slow base rhythm (Hz)
